@@ -11,6 +11,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 import org.firstinspires.ftc.teamcode.mechanisms.Distance_Sensor;
+
 @TeleOp(name = "StarterBot Chassis Teleop", group = "StarterBot")
 //@Disabled
 public class StarterBot  extends OpMode {
@@ -90,6 +91,7 @@ public class StarterBot  extends OpMode {
     /*
      * Code to run REPEATEDLY after the driver hits INIT, but before they hit START
      */
+
     @Override
     public void init_loop() {
     }
@@ -141,7 +143,7 @@ public class StarterBot  extends OpMode {
         telemetry.addData("Motors", "left (%.2f), right (%.2f)", leftPower, rightPower);
         telemetry.addData("Triggers", "left (%.2f, right (%.2f)",gamepad1.left_trigger, gamepad1.right_trigger);
 
-        telemetry.addData("Distance (in)",ds.getDistance());
+        telemetry.addData("Distance",ds.getDistance());
 
     }
 
