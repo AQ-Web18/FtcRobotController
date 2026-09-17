@@ -63,13 +63,13 @@ public class NewStarterBot extends OpMode {
          * to 'get' must correspond to the names assigned during the robot configuration
          * step.
          */
-        leftDrive = hardwareMap.get(DcMotor.class, "left_drive");
-        rightDrive = hardwareMap.get(DcMotor.class, "right_drive");
+        leftDrive = hardwareMap.get(DcMotor.class, "leftdrive");
+        rightDrive = hardwareMap.get(DcMotor.class, "rightdrive");
         intake = hardwareMap.get(DcMotor.class, "intake");
         launcher = hardwareMap.get(DcMotorEx.class, "launcher");
         windmillServo = hardwareMap.get(CRServo.class, "windmill");
-        leftIntakeServo = hardwareMap.get(CRServo.class, "left_intake_servo");
-        rightIntakeServo = hardwareMap.get(CRServo.class, "right_intake_servo");
+        leftIntakeServo = hardwareMap.get(CRServo.class, "leftintakeservo");
+        rightIntakeServo = hardwareMap.get(CRServo.class, "rightintakeservo");
 
         /*
          * To drive forward, most robots need the motor on one side to be reversed,
