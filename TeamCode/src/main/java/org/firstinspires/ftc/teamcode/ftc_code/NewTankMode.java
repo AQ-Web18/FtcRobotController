@@ -194,7 +194,7 @@ public class NewTankMode extends OpMode {
          */
         telemetry.addData("Motors", "left (%.2f), right (%.2f)", leftPower, rightPower);
         telemetry.addLine();
-        telemetry.addData("Distance",ds.getDistance());
+        telemetry.addData("Distance"+" (in)",ds.getDistance());
 
     }
 

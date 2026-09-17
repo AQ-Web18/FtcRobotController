@@ -143,7 +143,7 @@ public class StarterBot  extends OpMode {
         telemetry.addData("Motors", "left (%.2f), right (%.2f)", leftPower, rightPower);
         telemetry.addData("Triggers", "left (%.2f, right (%.2f)",gamepad1.left_trigger, gamepad1.right_trigger);
 
-        telemetry.addData("Distance",ds.getDistance());
+        telemetry.addData("Distance"+" (in)",ds.getDistance());
 
     }
 

@@ -136,7 +136,7 @@ public class TankMode extends OpMode {
                 gamepad1.right_trigger
         );
 
-        telemetry.addData("Distance", ds.getDistance());
+        telemetry.addData("Distance"+" (in)",ds.getDistance());
 
         telemetry.update();
     }
