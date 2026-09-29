@@ -6,7 +6,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 @TeleOp(name = "Strafer Chassis Starter Code", group = "Linear OpMode")
-public class Maechanum extends LinearOpMode {
+public class Mechanum extends LinearOpMode {
 
     // Declare drive motors
     private DcMotor leftFrontDrive = null;
