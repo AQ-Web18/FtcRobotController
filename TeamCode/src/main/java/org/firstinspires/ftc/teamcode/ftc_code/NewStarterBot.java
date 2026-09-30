@@ -229,7 +229,7 @@ public class NewStarterBot extends OpMode {
          * Here we ask if the driver is currently pressing the right bumper, AND the launcher is
          * spinning fast enough to make a successful shot. If it is, then we will turn on the
          * windmill servo to start feeding the elements into the launcher motor. We also
-         * add some power to the intake power. This can sometimes help dislodge stuck elements from
+         * add some power to the intake power. This can sometimes help dislodge stuck elements from  ewa
          * inside the hopper.
          */
         if (gamepad1.right_bumper && launcher.getVelocity() > LAUNCHER_MIN_VELOCITY) {
