@@ -236,7 +236,7 @@ public class NewStarterBot extends OpMode {
             intakePower += 0.5;
         }
 
-        if(gamepad1.b){
+        if(gamepad1.left_bumper){
             windmillServo.setPower(1);
         } else {
             windmillServo.setPower(0);
