@@ -13,7 +13,7 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import org.firstinspires.ftc.teamcode.mechanisms.Distance_Sensor;
 
 
-@TeleOp(name = "BioBuzz StarterBot Teleop", group = "StarterBot")
+@TeleOp(name = "StarterBot")
 //@Disabled
 public class NewStarterBot extends OpMode {
 
@@ -52,10 +52,10 @@ public class NewStarterBot extends OpMode {
 
     Distance_Sensor ds = new Distance_Sensor();
 
-    /*
+    @Override    /*
      * Code to run ONCE when the driver hits INIT
      */
-    @Override
+
     public void init() {
 
         /*
@@ -243,6 +243,5 @@ public class NewStarterBot extends OpMode {
         }
 
     }
-
 
 }

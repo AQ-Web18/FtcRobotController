@@ -236,8 +236,11 @@ public class NewTankMode extends OpMode {
          * inside the hopper.
          */
         if (gamepad1.right_bumper && launcher.getVelocity() > LAUNCHER_MIN_VELOCITY) {
-            windmillServo.setPower(1);
             intakePower += 0.5;
+        }
+
+        if(gamepad1.left_bumper){
+            windmillServo.setPower(1);
         } else {
             windmillServo.setPower(0);
         }
