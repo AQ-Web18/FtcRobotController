@@ -220,7 +220,7 @@ public class NewStarterBot extends OpMode {
          * Otherwise, we start spinning the launcher down.
          */
         if (gamepad1.right_bumper) {
-            launcher.setVelocity(LAUNCHER_TARGET_VELOCITY);
+            launcher.setVelocity(LAUNCHER_TARGET_VELOCITY/2);
         } else {
             launcher.setVelocity(0);
         }
