@@ -39,8 +39,7 @@ public class Mechanum extends LinearOpMode {
             // Gamepad inputs
             double y = -gamepad1.right_stick_x; // Stick up is negative, invert to make forward positive
             double x = gamepad1.right_stick_y * 1.1; // Strafe multiplier to counter friction
-            double rx =
-                    gamepad1.left_stick_x; // Turn
+            double rx = gamepad1.left_stick_x; // Turn
 
             // Calculate wheel power mix
             double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1.0);
