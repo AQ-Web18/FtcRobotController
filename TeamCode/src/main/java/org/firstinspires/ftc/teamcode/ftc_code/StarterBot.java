@@ -36,7 +36,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
  * so this file is for practice and demos. Keep the separate @Autonomous OpMode for competition.
  */
 
-@TeleOp(name = "RRG StarterBot (Driver + Auto)", group = "StarterBot")
+@TeleOp(name = "RRG StarterBot (Driver + Auto)")
 //@Disabled
 public class StarterBot extends OpMode {
 
