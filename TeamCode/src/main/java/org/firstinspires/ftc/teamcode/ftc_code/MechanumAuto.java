@@ -31,8 +31,8 @@ public class MechanumAuto extends LinearOpMode {
     static final double DRIVE_POWER = 0.5;
 
     static final double TO_LAUNCH_SECONDS = 1.0;    // drive forward to launch spot
-    static final double LAUNCH_VELOCITY = 625;      // ticks/sec (matches TeleOp's actual launch speed)
-    static final double SPINUP_TIMEOUT = 3.0;       // max seconds to wait for launcher speed
+    static final double LAUNCH_VELOCITY = 1250;      // ticks/sec (matches TeleOp's actual launch speed)
+    static final double SPINUP_TIMEOUT = 4.0;       // max seconds to wait for launcher speed
     static final double FEED_SECONDS = 6.0;         // how long to run the windmill/intake feeding
     static final double PARK_STRAFE_SECONDS = 1.0;  // strafe to park
     static final double STRAFE_DIRECTION = 1.0;     // 1.0 or -1.0 to flip strafe side (red/blue)

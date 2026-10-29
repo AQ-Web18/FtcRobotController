@@ -12,7 +12,7 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 
 import org.firstinspires.ftc.teamcode.mechanisms.Distance_Sensor;
 
-@TeleOp(name = "Mechanum StarterBot")
+@TeleOp(name = "Mechanum TeleOp")
 public class MechanumTeleOp extends OpMode {
 
     // Drive motors (mecanum)
@@ -44,7 +44,6 @@ public class MechanumTeleOp extends OpMode {
     // Intake power, shared between the triggers and launch()
     double intakePower;
 
-    Distance_Sensor ds = new Distance_Sensor();
 
     @Override
     public void init() {
@@ -87,8 +86,6 @@ public class MechanumTeleOp extends OpMode {
         rightIntakeServo.setDirection(DcMotorSimple.Direction.REVERSE);
         windmillServo.setDirection(DcMotorSimple.Direction.REVERSE);
 
-        ds.init(hardwareMap);
-
         telemetry.addData("Status", "Initialized");
     }
 
@@ -122,18 +119,16 @@ public class MechanumTeleOp extends OpMode {
         telemetry.addData("Back Right Power", "%.2f", backRightPower);
         telemetry.addData("Launcher Velocity", launcher.getVelocity());
         telemetry.addLine();
-        telemetry.addData("Distance (in)", ds.getDistance());
     }
 
     @Override
     public void stop() {
     }
-
     void mecanumDrive() {
         // Stick mapping carried over from the original mecanum code
-        double y = -gamepad1.right_stick_y;       // forward/back
-        double x = gamepad1.right_stick_x * 1.1;  // strafe, with multiplier to counter friction
-        double rx = gamepad1.left_stick_x;        // turn
+        double y = -gamepad1.right_stick_x; // Stick up is negative, invert to make forward positive
+        double x = gamepad1.right_stick_y * 1.1; // Strafe multiplier to counter friction
+        double rx = gamepad1.left_stick_x; // Turn
 
         double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1.0);
         frontLeftPower = (y + x + rx) / denominator;
@@ -150,14 +145,14 @@ public class MechanumTeleOp extends OpMode {
     void launch() {
         // Right bumper spins up the launcher
         if (gamepad1.right_bumper) {
-            launcher.setVelocity(LAUNCHER_TARGET_VELOCITY / 2);
+            launcher.setVelocity(LAUNCHER_TARGET_VELOCITY);
         } else {
             launcher.setVelocity(0);
         }
 
         // Add intake power when the launcher is up to speed
         if (gamepad1.right_bumper && launcher.getVelocity() > LAUNCHER_MIN_VELOCITY) {
-            intakePower += 0.5;
+            intakePower += 1;
         }
 
         // Left bumper runs the windmill feeder
