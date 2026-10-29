@@ -1,7 +1,8 @@
-package org.firstinspires.ftc.teamcode.ftc_code;
+package org.firstinspires.ftc.teamcode.old_ftc_code;
 
 import static com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior.BRAKE;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
@@ -10,10 +11,9 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 
-import org.firstinspires.ftc.teamcode.mechanisms.Distance_Sensor;
-
+@Disabled
 @TeleOp(name = "Mechanum TeleOp")
-public class MechanumChangeTargetSpeed extends OpMode {
+public class MechanumTeleOp extends OpMode {
 
     // Drive motors (mecanum)
     private DcMotor leftFrontDrive = null;
@@ -30,17 +30,10 @@ public class MechanumChangeTargetSpeed extends OpMode {
 
     /*
      * Launcher velocities in encoder ticks per second (28 ticks per revolution).
-     * The target is adjustable from the driver station with dpad left/right.
-     * The min velocity is always a fixed margin below the target.
+     * The min velocity is the threshold used in launch() before the intake gets extra power.
      */
-    public int launcherTargetVelocity = 1250;
-    public final int LAUNCHER_VELOCITY_STEP = 50;
-    public final int LAUNCHER_VELOCITY_MARGIN = 50;
-    public final int LAUNCHER_VELOCITY_MAX = 2800; // adjust to your motor's max ticks/sec
-
-    // Previous dpad state, so each press only changes the velocity once
-    private boolean lastDpadLeft = false;
-    private boolean lastDpadRight = false;
+    public final int LAUNCHER_TARGET_VELOCITY = 1250;
+    public final int LAUNCHER_MIN_VELOCITY = 1200;
 
     // Drive powers (kept as fields for telemetry)
     double frontLeftPower;
@@ -124,7 +117,6 @@ public class MechanumChangeTargetSpeed extends OpMode {
         telemetry.addData("Back Left Power", "%.2f", backLeftPower);
         telemetry.addData("Front Right Power", "%.2f", frontRightPower);
         telemetry.addData("Back Right Power", "%.2f", backRightPower);
-        telemetry.addData("Launcher Target", launcherTargetVelocity);
         telemetry.addData("Launcher Velocity", launcher.getVelocity());
         telemetry.addLine();
     }
@@ -132,7 +124,6 @@ public class MechanumChangeTargetSpeed extends OpMode {
     @Override
     public void stop() {
     }
-
     void mecanumDrive() {
         // Stick mapping carried over from the original mecanum code
         double y = -gamepad1.right_stick_x; // Stick up is negative, invert to make forward positive
@@ -151,32 +142,16 @@ public class MechanumChangeTargetSpeed extends OpMode {
         rightBackDrive.setPower(backRightPower);
     }
 
-    void adjustLauncherVelocity() {
-        // Dpad right = faster, dpad left = slower (one step per press)
-        if (gamepad1.dpad_right && !lastDpadRight) {
-            launcherTargetVelocity += LAUNCHER_VELOCITY_STEP;
-        }
-        if (gamepad1.dpad_left && !lastDpadLeft) {
-            launcherTargetVelocity -= LAUNCHER_VELOCITY_STEP;
-        }
-        lastDpadRight = gamepad1.dpad_right;
-        lastDpadLeft = gamepad1.dpad_left;
-
-        launcherTargetVelocity = Math.max(0, Math.min(LAUNCHER_VELOCITY_MAX, launcherTargetVelocity));
-    }
-
     void launch() {
-        adjustLauncherVelocity();
-
         // Right bumper spins up the launcher
         if (gamepad1.right_bumper) {
-            launcher.setVelocity(launcherTargetVelocity);
+            launcher.setVelocity(LAUNCHER_TARGET_VELOCITY);
         } else {
             launcher.setVelocity(0);
         }
 
         // Add intake power when the launcher is up to speed
-        if (gamepad1.right_bumper && launcher.getVelocity() > launcherTargetVelocity - LAUNCHER_VELOCITY_MARGIN) {
+        if (gamepad1.right_bumper && launcher.getVelocity() > LAUNCHER_MIN_VELOCITY) {
             intakePower += 1;
         }
 

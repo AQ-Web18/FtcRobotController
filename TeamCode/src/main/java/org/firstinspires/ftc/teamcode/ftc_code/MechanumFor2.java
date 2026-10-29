@@ -1,26 +1,4 @@
-/*   MIT License
- *   Copyright (c) [2026] [Base 10 Assets, LLC]
- *
- *   Permission is hereby granted, free of charge, to any person obtaining a copy
- *   of this software and associated documentation files (the "Software"), to deal
- *   in the Software without restriction, including without limitation the rights
- *   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- *   copies of the Software, and to permit persons to whom the Software is
- *   furnished to do so, subject to the following conditions:
-
- *   The above copyright notice and this permission notice shall be included in all
- *   copies or substantial portions of the Software.
-
- *   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- *   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- *   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- *   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- *   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- *   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- *   SOFTWARE.
- */
-
-package org.firstinspires.ftc.teamcode;
+package org.firstinspires.ftc.teamcode.ftc_code;
 
 import static com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior.BRAKE;
 
@@ -35,24 +13,27 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 /*
  * Royal Robotics Guild (FTC 34324) teleop for the goBILDA StarterBot with mecanum wheels.
  *
- * CONTROLS (gamepad1)
- *   Right stick up/down ..... drive forward / backward
- *   Right stick left/right .. strafe left / right
- *   Left stick left/right ... rotate left / right
- *   Right trigger ........... intake in (proportional)
- *   Left trigger ............ intake out / reverse (proportional)
- *   Right bumper (hold) ..... spin up shooter; feeds automatically once at speed
- *   D-pad right ............. shooter speed UP   (one step per press)
- *   D-pad left .............. shooter speed DOWN (one step per press)
+ * CONTROLS
+ *   GAMEPAD 1 (driver): movement + intake
+ *     Right stick up/down ..... drive forward / backward
+ *     Right stick left/right .. strafe left / right
+ *     Left stick left/right ... rotate left / right
+ *     Right trigger ........... intake in (proportional)
+ *     Left trigger ............ intake out / reverse (proportional)
+ *
+ *   GAMEPAD 2 (operator): shooter + windmill
+ *     Right bumper (hold) ..... spin up shooter; windmill feeds automatically once at speed
+ *     D-pad right ............. shooter speed UP   (one step per press)
+ *     D-pad left .............. shooter speed DOWN (one step per press)
  *
  * The shooter uses closed-loop velocity control (RUN_USING_ENCODER). Velocities are in
  * encoder ticks per second. These motors report 28 ticks per revolution, so
  * RPM = ticks/sec / 28 * 60.
  */
 
-@TeleOp(name = "Mec BioBuzz StarterBot Teleop", group = "StarterBot")
+@TeleOp(name = "Mechanum Teleop", group = "StarterBot")
 //@Disabled
-public class BioBuzzStarterbotTeleopMecanum extends OpMode {
+public class MechanumFor2 extends OpMode {
 
     // ----- Hardware -----
     private DcMotor leftFront = null;
@@ -78,7 +59,7 @@ public class BioBuzzStarterbotTeleopMecanum extends OpMode {
      */
     public static final double SHOOTER_READY_FRACTION = 0.96;
 
-    // Current target speed, adjustable during the match with the D-pad
+    // Current target speed, adjustable during the match with the D-pad (gamepad2)
     private double shooterTargetVelocity = SHOOTER_START_VELOCITY;
 
     // Previous D-pad states, used so one press = one step (not one step every loop)
@@ -149,7 +130,7 @@ public class BioBuzzStarterbotTeleopMecanum extends OpMode {
         windmillServo.setPower(0);
 
         telemetry.addData("Status", "Initialized");
-        telemetry.addData("Code version", "v3 - drive directions fixed");
+        telemetry.addData("Code version", "v4 - two controllers");
         telemetry.addData("Shooter start speed", "%.0f t/s (%.0f RPM)",
                 shooterTargetVelocity, ticksToRpm(shooterTargetVelocity));
     }
@@ -168,6 +149,7 @@ public class BioBuzzStarterbotTeleopMecanum extends OpMode {
     @Override
     public void loop() {
         /*
+         * GAMEPAD 1: movement + intake.
          * Right stick: forward/back and strafe. Left stick X: rotate.
          * Pushing a stick forward gives a NEGATIVE y value, so we flip the sign.
          */
@@ -176,16 +158,14 @@ public class BioBuzzStarterbotTeleopMecanum extends OpMode {
         double rotate  =  gamepad1.left_stick_x;
         mecanumDrive(forward, strafe, rotate);
 
-        // Intake: right trigger pulls in, left trigger pushes out
+        // Intake: right trigger pulls in, left trigger pushes out (gamepad1)
         intakePower = gamepad1.right_trigger - gamepad1.left_trigger;
 
+        // GAMEPAD 2: shooter + windmill
         adjustShooterSpeed();
         launch();
 
-        /*
-         * Set intake power AFTER launch(), because launch() may add extra intake power
-         * to help push elements into the shooter.
-         */
+        // Intake is controlled only by gamepad1's triggers
         intake.setPower(intakePower);
         leftIntakeServo.setPower(intakePower);
         rightIntakeServo.setPower(intakePower);
@@ -197,8 +177,7 @@ public class BioBuzzStarterbotTeleopMecanum extends OpMode {
                 shooter.getVelocity(), ticksToRpm(shooter.getVelocity()));
         telemetry.addData("Front", "left (%.2f), right (%.2f)", leftFrontPower, rightFrontPower);
         telemetry.addData("Back", "left (%.2f), right (%.2f)", leftBackPower, rightBackPower);
-        telemetry.addData("Triggers", "left (%.2f), right (%.2f)",
-                gamepad1.left_trigger, gamepad1.right_trigger);
+        telemetry.addData("Triggers (gp1)", "left (%.2f), right (%.2f)", gamepad1.left_trigger, gamepad1.right_trigger);
     }
 
     @Override
@@ -233,13 +212,13 @@ public class BioBuzzStarterbotTeleopMecanum extends OpMode {
     }
 
     /*
-     * D-pad right = faster, D-pad left = slower.
+     * GAMEPAD 2: D-pad right = faster, D-pad left = slower.
      * We compare to last loop's button state so the speed changes only once per press.
      * Without this, holding the button for half a second would change the speed ~25 times.
      */
     void adjustShooterSpeed() {
-        boolean dpadRight = gamepad1.dpad_right;
-        boolean dpadLeft  = gamepad1.dpad_left;
+        boolean dpadRight = gamepad2.dpad_right;
+        boolean dpadLeft  = gamepad2.dpad_left;
 
         if (dpadRight && !prevDpadRight) {
             shooterTargetVelocity += SHOOTER_STEP;
@@ -257,11 +236,12 @@ public class BioBuzzStarterbotTeleopMecanum extends OpMode {
     }
 
     /*
-     * Hold right bumper to spin up the shooter. Once it reaches 96% of the target speed,
-     * the windmill feeds elements in and the intake gets a little boost to clear jams.
+     * GAMEPAD 2: hold right bumper to spin up the shooter. Once it reaches 96% of the
+     * target speed, the windmill feeds elements in. The intake is NOT touched here;
+     * it is controlled only by gamepad1.
      */
     void launch() {
-        if (gamepad1.right_bumper) {
+        if (gamepad2.right_bumper) {
             shooter.setVelocity(shooterTargetVelocity);
         } else {
             shooter.setVelocity(0);
@@ -269,9 +249,8 @@ public class BioBuzzStarterbotTeleopMecanum extends OpMode {
 
         double readyVelocity = shooterTargetVelocity * SHOOTER_READY_FRACTION;
 
-        if (gamepad1.right_bumper && shooter.getVelocity() > readyVelocity) {
+        if (gamepad2.right_bumper && shooter.getVelocity() > readyVelocity) {
             windmillServo.setPower(1);
-            intakePower += 0.5;
         } else {
             windmillServo.setPower(0);
         }
