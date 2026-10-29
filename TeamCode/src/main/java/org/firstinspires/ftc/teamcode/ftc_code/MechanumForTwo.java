@@ -125,26 +125,41 @@ public class MechanumForTwo extends OpMode {
     public void stop() {
     }
     void mecanumDrive() {
-        // Stick mapping carried over from the original mecanum code
-        double y = -gamepad1.right_stick_x; // Stick up is negative, invert to make forward positive
-        double x = gamepad1.right_stick_y * 1.1; // Strafe multiplier to counter friction
-        double rx = gamepad1.left_stick_x; // Turn
+        // Right joystick controls translation (moving around)
+        double y = -gamepad1.right_stick_y; // Negative because pushing up on a joystick is usually negative
+        double x = gamepad1.right_stick_x;  // Positive = Right, Negative = Left
 
-        double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1.0);
-        frontLeftPower = (y + x + rx) / denominator;
-        backLeftPower = (y - x + rx) / denominator;
-        frontRightPower = (y - x - rx) / denominator;
-        backRightPower = (y + x - rx) / denominator;
+// Left joystick controls rotation
+        double rx = gamepad1.left_stick_x;  // Positive = Turn Right, Negative = Turn Left
 
+// Calculate power for each wheel using your specific inputs
+        double frontLeftPower  = y + x + rx;
+        double backLeftPower   = y - x + rx;
+        double frontRightPower = y - x - rx;
+        double backRightPower  = y + x - rx;
+
+// Normalize values so no motor power exceeds 1.0 (-1.0 to 1.0 range)
+        double max = Math.max(1.0, Math.abs(frontLeftPower));
+        max = Math.max(max, Math.abs(backLeftPower));
+        max = Math.max(max, Math.abs(frontRightPower));
+        max = Math.max(max, Math.abs(backRightPower));
+
+        frontLeftPower  /= max;
+        backLeftPower   /= max;
+        frontRightPower /= max;
+        backRightPower  /= max;
+
+// Send calculated power to the motor controllers
         leftFrontDrive.setPower(frontLeftPower);
         leftBackDrive.setPower(backLeftPower);
         rightFrontDrive.setPower(frontRightPower);
         rightBackDrive.setPower(backRightPower);
+
     }
 
     void launch() {
         // Right bumper spins up the launcher
-        if (gamepad2.right_bumper) {
+        if (gamepad2.right_trigger_pressed) {
             launcher.setVelocity(LAUNCHER_TARGET_VELOCITY);
         } else {
             launcher.setVelocity(0);
@@ -156,7 +171,7 @@ public class MechanumForTwo extends OpMode {
         }
 
         // Left bumper runs the windmill feeder
-        if (gamepad2.left_bumper) {
+        if (gamepad2.left_trigger_pressed) {
             windmillServo.setPower(1);
         } else {
             windmillServo.setPower(0);
