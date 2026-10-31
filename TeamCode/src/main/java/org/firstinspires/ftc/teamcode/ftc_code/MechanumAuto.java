@@ -9,128 +9,181 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
-import com.qualcomm.robotcore.util.ElapsedTime;
 
 /*
- * Simple time-based autonomous for the mecanum StarterBot:
- *   1. Drive to a launch spot
- *   2. Spin up the launcher and feed with the windmill
- *   3. Drive/strafe off the line to park
+ * Royal Robotics Guild (FTC 34324) autonomous for the goBILDA StarterBot with mecanum wheels.
+ * Built from MechanumTeleOp: same hardware names, motor directions, shooter PIDF and
+ * "ready to fire" check (shooter at 96% of target speed before the windmill feeds).
  *
- * All distances are time-based, so TUNE the values in the "TUNING" section on your field.
+ * SEQUENCE
+ *   1. Drive forward to the shooting spot
+ *   2. Spin up the shooter
+ *   3. Feed elements (windmill + intake) only while the shooter is at speed
+ *   4. Strafe sideways to park
+ *
+ * This is TIME BASED, so distances change with battery voltage. Tune the constants below
+ * on a fully charged battery.
  */
-@Autonomous(name = "Mechanum Auto", group = "Auto")
+@Autonomous(name = "Mechanum Auto", group = "StarterBot")
+//@Disabled
 public class MechanumAuto extends LinearOpMode {
 
-    private DcMotor leftFrontDrive, leftBackDrive, rightFrontDrive, rightBackDrive;
-    private DcMotorEx launcher;
+    // ----- Tunables -----
+    static final double DRIVE_POWER = 0.5;
+
+    // Seconds to drive forward to the shooting spot (use a negative number to back up)
+    static final double TO_SHOOT_SEC = 0.8;
+
+    // Shooter (ticks per second, same units as the TeleOp)
+    static final double SHOOTER_VELOCITY       = 1250;
+    static final double SHOOTER_READY_FRACTION = 0.96;
+    static final double SPINUP_TIMEOUT_SEC     = 3.0;  // fire anyway if it never reaches speed
+    static final double SHOOT_DURATION_SEC     = 6.0;  // total time spent feeding
+
+    // Park: strafe sideways. 1.0 = strafe right, -1.0 = strafe left
+    static final double PARK_STRAFE_DIRECTION = 1.0;
+    static final double PARK_STRAFE_SEC       = 1.0;
+
+    // ----- Hardware -----
+    private DcMotor leftFront, leftBack, rightFront, rightBack;
+    private DcMotorEx shooter;
     private DcMotor intake;
     private CRServo leftIntakeServo, rightIntakeServo, windmillServo;
 
-    // ---------- TUNING ----------
-    static final double DRIVE_POWER = 0.5;
-
-    static final double TO_LAUNCH_SECONDS = 1.0;    // drive forward to launch spot
-    static final double LAUNCH_VELOCITY = 1250;      // ticks/sec (matches TeleOp's actual launch speed)
-    static final double SPINUP_TIMEOUT = 4.0;       // max seconds to wait for launcher speed
-    static final double FEED_SECONDS = 6.0;         // how long to run the windmill/intake feeding
-    static final double PARK_STRAFE_SECONDS = 1.0;  // strafe to park
-    static final double STRAFE_DIRECTION = 1.0;     // 1.0 or -1.0 to flip strafe side (red/blue)
-    // ----------------------------
-
     @Override
     public void runOpMode() {
-        leftFrontDrive  = hardwareMap.get(DcMotor.class, "left_front");
-        leftBackDrive   = hardwareMap.get(DcMotor.class, "left_back");
-        rightFrontDrive = hardwareMap.get(DcMotor.class, "right_front");
-        rightBackDrive  = hardwareMap.get(DcMotor.class, "right_back");
+        initHardware();
 
-        intake = hardwareMap.get(DcMotor.class, "intake");
-        launcher = hardwareMap.get(DcMotorEx.class, "launcher");
-        windmillServo = hardwareMap.get(CRServo.class, "windmill");
-        leftIntakeServo = hardwareMap.get(CRServo.class, "leftintakeservo");
-        rightIntakeServo = hardwareMap.get(CRServo.class, "rightintakeservo");
-
-        leftFrontDrive.setDirection(DcMotorSimple.Direction.REVERSE);
-        leftBackDrive.setDirection(DcMotorSimple.Direction.FORWARD);
-        rightFrontDrive.setDirection(DcMotorSimple.Direction.REVERSE);
-        rightBackDrive.setDirection(DcMotorSimple.Direction.REVERSE);
-
-        leftFrontDrive.setZeroPowerBehavior(BRAKE);
-        leftBackDrive.setZeroPowerBehavior(BRAKE);
-        rightFrontDrive.setZeroPowerBehavior(BRAKE);
-        rightBackDrive.setZeroPowerBehavior(BRAKE);
-        intake.setZeroPowerBehavior(BRAKE);
-
-        launcher.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        launcher.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER,
-                new PIDFCoefficients(40, 0, 0, 12.5));
-
-        rightIntakeServo.setDirection(DcMotorSimple.Direction.REVERSE);
-        windmillServo.setDirection(DcMotorSimple.Direction.REVERSE);
-
-        telemetry.addData("Status", "Initialized - ready");
+        telemetry.addData("Status", "Initialized - waiting for start");
         telemetry.update();
-
         waitForStart();
-        if (isStopRequested()) return;
 
-        // 1. Drive to launch spot
-        drive(DRIVE_POWER, 0, 0, TO_LAUNCH_SECONDS);
+        if (!opModeIsActive()) return;
 
-        // 2. Spin up launcher, wait until it is close to speed (or timeout)
-        launcher.setVelocity(LAUNCH_VELOCITY);
-        ElapsedTime timer = new ElapsedTime();
-        while (opModeIsActive() && timer.seconds() < SPINUP_TIMEOUT
-                && launcher.getVelocity() < LAUNCH_VELOCITY - 25) {
-            telemetry.addData("Launcher", launcher.getVelocity());
+        // 1) Drive to the shooting spot
+        if (TO_SHOOT_SEC >= 0) {
+            drive(DRIVE_POWER, 0, 0, TO_SHOOT_SEC);
+        } else {
+            drive(-DRIVE_POWER, 0, 0, -TO_SHOOT_SEC);
+        }
+
+        // 2) Spin up the shooter
+        double readyVelocity = SHOOTER_VELOCITY * SHOOTER_READY_FRACTION;
+        shooter.setVelocity(SHOOTER_VELOCITY);
+
+        double spinStart = getRuntime();
+        while (opModeIsActive()
+                && shooter.getVelocity() < readyVelocity
+                && getRuntime() - spinStart < SPINUP_TIMEOUT_SEC) {
+            telemetry.addData("Phase", "Spinning up");
+            telemetry.addData("Shooter", "%.0f / %.0f t/s", shooter.getVelocity(), SHOOTER_VELOCITY);
             telemetry.update();
             idle();
         }
 
-        // Feed with windmill + intake
-        windmillServo.setPower(1);
-        setIntake(1);
-        timer.reset();
-        while (opModeIsActive() && timer.seconds() < FEED_SECONDS) {
-            telemetry.addData("Launcher", launcher.getVelocity());
-            telemetry.addData("Status", "Feeding");
+        // 3) Shoot: same logic as the TeleOp, only feed while the shooter is at speed
+        double shootStart = getRuntime();
+        while (opModeIsActive() && getRuntime() - shootStart < SHOOT_DURATION_SEC) {
+            boolean ready = shooter.getVelocity() > readyVelocity;
+            windmillServo.setPower(ready ? 1 : 0);
+            setIntake(ready ? 1.0 : 0);
+
+            telemetry.addData("Phase", "Shooting");
+            telemetry.addData("Shooter", "%.0f / %.0f t/s", shooter.getVelocity(), SHOOTER_VELOCITY);
+            telemetry.addData("Feeding", ready);
             telemetry.update();
             idle();
         }
         windmillServo.setPower(0);
         setIntake(0);
-        launcher.setVelocity(0);
+        shooter.setVelocity(0);
 
-        // 3. Park
-        drive(0, STRAFE_DIRECTION * DRIVE_POWER, 0, PARK_STRAFE_SECONDS);
+        // 4) Park
+        drive(0, PARK_STRAFE_DIRECTION, 0, PARK_STRAFE_SEC);
 
-        telemetry.addData("Status", "Done");
+        stopDrive();
+        telemetry.addData("Phase", "Done");
         telemetry.update();
+    }
+
+    private void initHardware() {
+        leftFront  = hardwareMap.get(DcMotor.class, "left_front");
+        leftBack   = hardwareMap.get(DcMotor.class, "left_back");
+        rightFront = hardwareMap.get(DcMotor.class, "right_front");
+        rightBack  = hardwareMap.get(DcMotor.class, "right_back");
+        intake     = hardwareMap.get(DcMotor.class, "intake");
+        shooter    = hardwareMap.get(DcMotorEx.class, "shooter");
+        windmillServo    = hardwareMap.get(CRServo.class, "windmill");
+        leftIntakeServo  = hardwareMap.get(CRServo.class, "leftintakeservo");
+        rightIntakeServo = hardwareMap.get(CRServo.class, "rightintakeservo");
+
+        // Same directions as the TeleOp
+        leftFront.setDirection(DcMotor.Direction.FORWARD);
+        leftBack.setDirection(DcMotor.Direction.REVERSE);
+        rightFront.setDirection(DcMotor.Direction.REVERSE);
+        rightBack.setDirection(DcMotor.Direction.REVERSE);
+
+        leftFront.setZeroPowerBehavior(BRAKE);
+        leftBack.setZeroPowerBehavior(BRAKE);
+        rightFront.setZeroPowerBehavior(BRAKE);
+        rightBack.setZeroPowerBehavior(BRAKE);
+        intake.setZeroPowerBehavior(BRAKE);
+
+        shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        shooter.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER,
+                new PIDFCoefficients(40, 0, 0, 12.5));
+
+        rightIntakeServo.setDirection(DcMotorSimple.Direction.REVERSE);
+        windmillServo.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        leftIntakeServo.setPower(0);
+        rightIntakeServo.setPower(0);
+        windmillServo.setPower(0);
+    }
+
+    /*
+     * Same mecanum math as the TeleOp.
+     * forward: + = forward, strafe: + = right, rotate: + = clockwise (all -1..1).
+     */
+    private void drive(double forward, double strafe, double rotate, double seconds) {
+        double lf = forward + strafe + rotate;
+        double rf = forward - strafe - rotate;
+        double lb = forward - strafe + rotate;
+        double rb = forward + strafe - rotate;
+
+        double max = Math.max(Math.max(Math.abs(lf), Math.abs(rf)),
+                Math.max(Math.abs(lb), Math.abs(rb)));
+        if (max > 1.0) {
+            lf /= max;
+            rf /= max;
+            lb /= max;
+            rb /= max;
+        }
+
+        leftFront.setPower(lf);
+        rightFront.setPower(rf);
+        leftBack.setPower(lb);
+        rightBack.setPower(rb);
+
+        double start = getRuntime();
+        while (opModeIsActive() && getRuntime() - start < seconds) {
+            telemetry.addData("Phase", "Driving");
+            telemetry.update();
+            idle();
+        }
+        stopDrive();
+    }
+
+    private void stopDrive() {
+        leftFront.setPower(0);
+        leftBack.setPower(0);
+        rightFront.setPower(0);
+        rightBack.setPower(0);
     }
 
     private void setIntake(double power) {
         intake.setPower(power);
         leftIntakeServo.setPower(power);
         rightIntakeServo.setPower(power);
-    }
-
-    /** Time-based mecanum move. y = forward, x = strafe, rx = turn (same mix as TeleOp). */
-    private void drive(double y, double x, double rx, double seconds) {
-        double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1.0);
-        leftFrontDrive.setPower((y + x + rx) / denominator);
-        leftBackDrive.setPower((y - x + rx) / denominator);
-        rightFrontDrive.setPower((y - x - rx) / denominator);
-        rightBackDrive.setPower((y + x - rx) / denominator);
-
-        ElapsedTime t = new ElapsedTime();
-        while (opModeIsActive() && t.seconds() < seconds) {
-            idle();
-        }
-
-        leftFrontDrive.setPower(0);
-        leftBackDrive.setPower(0);
-        rightFrontDrive.setPower(0);
-        rightBackDrive.setPower(0);
     }
 }
