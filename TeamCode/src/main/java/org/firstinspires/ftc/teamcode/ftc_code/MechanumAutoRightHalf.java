@@ -16,33 +16,33 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
  * "ready to fire" check (shooter at 96% of target speed before the windmill feeds).
  *
  * SEQUENCE
- *   1. Drive forward to the shooting spot
- *   2. Spin up the shooter
- *   3. Feed elements (windmill + intake) only while the shooter is at speed
- *   4. Strafe sideways to park
+ *   1. Strafe left 2 s
+ *   2. Spin up the shooter to 1250
+ *   3. Run the windmill + intake for 6 s (only while the shooter is at speed)
+ *   4. Strafe right 2 s, then drive backwards 0.05 s
  *
  * This is TIME BASED, so distances change with battery voltage. Tune the constants below
  * on a fully charged battery.
  */
-@Autonomous(name = "Mechanum Auto", group = "StarterBot")
+@Autonomous(name = "Mechanum Auto Right Half", group = "StarterBot")
 //@Disabled
-public class MechanumAuto extends LinearOpMode {
+public class MechanumAutoRightHalf extends LinearOpMode {
 
     // ----- Tunables -----
     static final double DRIVE_POWER = 0.5;
 
-    // Seconds to drive forward to the shooting spot (use a negative number to back up)
-    static final double TO_SHOOT_SEC = 0.8;
+    // Move 1: strafe left to the shooting spot
+    static final double STRAFE_LEFT_SEC = 2.20;
 
     // Shooter (ticks per second, same units as the TeleOp)
-    static final double SHOOTER_VELOCITY       = 1250;
+    static final double SHOOTER_VELOCITY       = 1200    ;
     static final double SHOOTER_READY_FRACTION = 0.96;
     static final double SPINUP_TIMEOUT_SEC     = 3.0;  // fire anyway if it never reaches speed
     static final double SHOOT_DURATION_SEC     = 6.0;  // total time spent feeding
 
-    // Park: strafe sideways. 1.0 = strafe right, -1.0 = strafe left
-    static final double PARK_STRAFE_DIRECTION = 1.0;
-    static final double PARK_STRAFE_SEC       = 1.0;
+    // After shooting: strafe right, then drive backwards
+    static final double STRAFE_RIGHT_SEC = 2.30;
+    static final double BACKWARD_SEC     = 0.05;
 
     // ----- Hardware -----
     private DcMotor leftFront, leftBack, rightFront, rightBack;
@@ -60,12 +60,8 @@ public class MechanumAuto extends LinearOpMode {
 
         if (!opModeIsActive()) return;
 
-        // 1) Drive to the shooting spot
-        if (TO_SHOOT_SEC >= 0) {
-            drive(DRIVE_POWER, 0, 0, TO_SHOOT_SEC);
-        } else {
-            drive(-DRIVE_POWER, 0, 0, -TO_SHOOT_SEC);
-        }
+        // 1) Strafe left to the shooting spot
+        drive(0, -DRIVE_POWER, 0, STRAFE_LEFT_SEC);
 
         // 2) Spin up the shooter
         double readyVelocity = SHOOTER_VELOCITY * SHOOTER_READY_FRACTION;
@@ -98,8 +94,9 @@ public class MechanumAuto extends LinearOpMode {
         setIntake(0);
         shooter.setVelocity(0);
 
-        // 4) Park
-        drive(0, PARK_STRAFE_DIRECTION, 0, PARK_STRAFE_SEC);
+        // 4) Strafe right, then backwards
+        drive(0, DRIVE_POWER, 0, STRAFE_RIGHT_SEC);
+        drive(-DRIVE_POWER, 0, 0, BACKWARD_SEC);
 
         stopDrive();
         telemetry.addData("Phase", "Done");
