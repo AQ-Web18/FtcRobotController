@@ -12,14 +12,15 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 
 /*
  * Royal Robotics Guild (FTC 34324) autonomous for the goBILDA StarterBot with mecanum wheels.
- * Built from MechanumTeleOp: same hardware names, motor directions, shooter PIDF and
- * "ready to fire" check (shooter at 96% of target speed before the windmill feeds).
+ * Same hardware names, motor directions and shooter PIDF as the TeleOp.
  *
  * SEQUENCE
- *   1. Strafe left 2 s
- *   2. Spin up the shooter to 1250
- *   3. Run the windmill + intake for 6 s (only while the shooter is at speed)
- *   4. Strafe right 2 s, then drive backwards 0.05 s
+ *   1. Forward
+ *   2. Turn right 90 degrees
+ *   3. Forward, then strafe right 0.05 s
+ *   4. Spin the shooter to 1250; when it reaches 1250 the windmill starts
+ *   5. Return to the start by reversing the moves:
+ *      backward, turn left 90 degrees, backward
  *
  * This is TIME BASED, so distances change with battery voltage. Tune the constants below
  * on a fully charged battery.
@@ -30,25 +31,28 @@ public class MechanumAutoRightHalf extends LinearOpMode {
 
     // ----- Tunables -----
     static final double DRIVE_POWER = 0.5;
+    static final double TURN_POWER  = 0.5;
 
-    // Move 1: strafe left to the shooting spot
-    static final double STRAFE_LEFT_SEC = 2.20;
+    // Outbound moves
+    static final double FORWARD_1_SEC = 1.75;
+    static final double TURN_SEC      = 0.67;  // TUNE THIS: time for a 90 degree right turn
+    static final double FORWARD_2_SEC = 3.50;
+    static final double STRAFE_RIGHT_SEC = 0.05;  // small nudge right after the second forward
+
+    // Return moves (separate so each can be tuned on its own)
+    static final double BACKWARD_1_SEC = 3.50;  // undoes FORWARD_2_SEC
+    static final double TURN_LEFT_SEC  = 0.75;  // TUNE THIS: time for the 90 degree left turn back
+    static final double BACKWARD_2_SEC = 1.50;  // last move: undoes FORWARD_1_SEC
 
     // Shooter (ticks per second, same units as the TeleOp)
-    static final double SHOOTER_VELOCITY       = 1200    ;
-    static final double SHOOTER_READY_FRACTION = 0.96;
-    static final double SPINUP_TIMEOUT_SEC     = 3.0;  // fire anyway if it never reaches speed
-    static final double SHOOT_DURATION_SEC     = 6.0;  // total time spent feeding
-
-    // After shooting: strafe right, then drive backwards
-    static final double STRAFE_RIGHT_SEC = 2.30;
-    static final double BACKWARD_SEC     = 0.05;
+    static final double SHOOTER_VELOCITY   = 1220;
+    static final double SPINUP_TIMEOUT_SEC = 3.0;  // feed anyway if it never reaches 1250
+    static final double SHOOT_DURATION_SEC = 6.0;  // total time spent feeding
 
     // ----- Hardware -----
     private DcMotor leftFront, leftBack, rightFront, rightBack;
     private DcMotorEx shooter;
-    private DcMotor intake;
-    private CRServo leftIntakeServo, rightIntakeServo, windmillServo;
+    private CRServo windmillServo;
 
     @Override
     public void runOpMode() {
@@ -60,16 +64,24 @@ public class MechanumAutoRightHalf extends LinearOpMode {
 
         if (!opModeIsActive()) return;
 
-        // 1) Strafe left to the shooting spot
-        drive(0, -DRIVE_POWER, 0, STRAFE_LEFT_SEC);
+        // 1) Forward
+        drive("Forward", DRIVE_POWER, 0, 0, FORWARD_1_SEC);
 
-        // 2) Spin up the shooter
-        double readyVelocity = SHOOTER_VELOCITY * SHOOTER_READY_FRACTION;
+        // 2) Turn right 90 degrees (+ rotate = clockwise)
+        drive("Turn right 90", 0, 0, TURN_POWER, TURN_SEC);
+
+        // 3) Forward
+        drive("Forward", DRIVE_POWER, 0, 0, FORWARD_2_SEC);
+
+        // 3b) Strafe right a touch
+        drive("Strafe right", 0, DRIVE_POWER, 0, STRAFE_RIGHT_SEC);
+
+        // 4) Spin the shooter up to the target speed
         shooter.setVelocity(SHOOTER_VELOCITY);
 
         double spinStart = getRuntime();
         while (opModeIsActive()
-                && shooter.getVelocity() < readyVelocity
+                && shooter.getVelocity() < SHOOTER_VELOCITY
                 && getRuntime() - spinStart < SPINUP_TIMEOUT_SEC) {
             telemetry.addData("Phase", "Spinning up");
             telemetry.addData("Shooter", "%.0f / %.0f t/s", shooter.getVelocity(), SHOOTER_VELOCITY);
@@ -77,26 +89,22 @@ public class MechanumAutoRightHalf extends LinearOpMode {
             idle();
         }
 
-        // 3) Shoot: same logic as the TeleOp, only feed while the shooter is at speed
+        // Windmill starts once the shooter has hit 1250 and stays on for the shoot time
+        windmillServo.setPower(1);
         double shootStart = getRuntime();
         while (opModeIsActive() && getRuntime() - shootStart < SHOOT_DURATION_SEC) {
-            boolean ready = shooter.getVelocity() > readyVelocity;
-            windmillServo.setPower(ready ? 1 : 0);
-            setIntake(ready ? 1.0 : 0);
-
             telemetry.addData("Phase", "Shooting");
             telemetry.addData("Shooter", "%.0f / %.0f t/s", shooter.getVelocity(), SHOOTER_VELOCITY);
-            telemetry.addData("Feeding", ready);
             telemetry.update();
             idle();
         }
         windmillServo.setPower(0);
-        setIntake(0);
         shooter.setVelocity(0);
 
-        // 4) Strafe right, then backwards
-        drive(0, DRIVE_POWER, 0, STRAFE_RIGHT_SEC);
-        drive(-DRIVE_POWER, 0, 0, BACKWARD_SEC);
+        // 5) Go back to the start: reverse the moves in reverse order
+        drive("Backward", -DRIVE_POWER, 0, 0, BACKWARD_1_SEC);
+        drive("Turn left 90", 0, 0, -TURN_POWER, TURN_LEFT_SEC);
+        drive("Backward", -DRIVE_POWER, 0, 0, BACKWARD_2_SEC);
 
         stopDrive();
         telemetry.addData("Phase", "Done");
@@ -108,11 +116,8 @@ public class MechanumAutoRightHalf extends LinearOpMode {
         leftBack   = hardwareMap.get(DcMotor.class, "left_back");
         rightFront = hardwareMap.get(DcMotor.class, "right_front");
         rightBack  = hardwareMap.get(DcMotor.class, "right_back");
-        intake     = hardwareMap.get(DcMotor.class, "intake");
         shooter    = hardwareMap.get(DcMotorEx.class, "shooter");
-        windmillServo    = hardwareMap.get(CRServo.class, "windmill");
-        leftIntakeServo  = hardwareMap.get(CRServo.class, "leftintakeservo");
-        rightIntakeServo = hardwareMap.get(CRServo.class, "rightintakeservo");
+        windmillServo = hardwareMap.get(CRServo.class, "windmill");
 
         // Same directions as the TeleOp
         leftFront.setDirection(DcMotor.Direction.FORWARD);
@@ -124,17 +129,12 @@ public class MechanumAutoRightHalf extends LinearOpMode {
         leftBack.setZeroPowerBehavior(BRAKE);
         rightFront.setZeroPowerBehavior(BRAKE);
         rightBack.setZeroPowerBehavior(BRAKE);
-        intake.setZeroPowerBehavior(BRAKE);
 
         shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         shooter.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER,
                 new PIDFCoefficients(40, 0, 0, 12.5));
 
-        rightIntakeServo.setDirection(DcMotorSimple.Direction.REVERSE);
         windmillServo.setDirection(DcMotorSimple.Direction.REVERSE);
-
-        leftIntakeServo.setPower(0);
-        rightIntakeServo.setPower(0);
         windmillServo.setPower(0);
     }
 
@@ -142,7 +142,7 @@ public class MechanumAutoRightHalf extends LinearOpMode {
      * Same mecanum math as the TeleOp.
      * forward: + = forward, strafe: + = right, rotate: + = clockwise (all -1..1).
      */
-    private void drive(double forward, double strafe, double rotate, double seconds) {
+    private void drive(String label, double forward, double strafe, double rotate, double seconds) {
         double lf = forward + strafe + rotate;
         double rf = forward - strafe - rotate;
         double lb = forward - strafe + rotate;
@@ -164,7 +164,8 @@ public class MechanumAutoRightHalf extends LinearOpMode {
 
         double start = getRuntime();
         while (opModeIsActive() && getRuntime() - start < seconds) {
-            telemetry.addData("Phase", "Driving");
+            telemetry.addData("Phase", label);
+            telemetry.addData("Time left", "%.2f s", seconds - (getRuntime() - start));
             telemetry.update();
             idle();
         }
@@ -176,11 +177,5 @@ public class MechanumAutoRightHalf extends LinearOpMode {
         leftBack.setPower(0);
         rightFront.setPower(0);
         rightBack.setPower(0);
-    }
-
-    private void setIntake(double power) {
-        intake.setPower(power);
-        leftIntakeServo.setPower(power);
-        rightIntakeServo.setPower(power);
     }
 }
