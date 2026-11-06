@@ -27,7 +27,7 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
  */
 @Autonomous(name = "Mechanum Auto Right Half", group = "StarterBot")
 //@Disabled
-public class MechanumAutoRightHalf extends LinearOpMode {
+public class MechanumAutoShooting extends LinearOpMode {
 
     // ----- Tunables -----
     static final double DRIVE_POWER = 0.5;
