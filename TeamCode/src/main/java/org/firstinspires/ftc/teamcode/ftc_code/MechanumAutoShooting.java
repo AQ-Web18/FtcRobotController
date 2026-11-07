@@ -15,17 +15,18 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
  * Same hardware names, motor directions and shooter PIDF as the TeleOp.
  *
  * SEQUENCE
+ *   0. Strafe right 0.5 s
  *   1. Forward
  *   2. Turn right 90 degrees
  *   3. Forward, then strafe right 0.05 s
- *   4. Spin the shooter to 1250; when it reaches 1250 the windmill starts
+ *   4. Spin the shooter to 1250; when it reaches 1250 the windmill and intake start
  *   5. Return to the start by reversing the moves:
  *      backward, turn left 90 degrees, backward
  *
  * This is TIME BASED, so distances change with battery voltage. Tune the constants below
  * on a fully charged battery.
  */
-@Autonomous(name = "Mechanum Auto Right Half", group = "StarterBot")
+@Autonomous(name = "Mechanum Auto Shooting~", group = "StarterBot")
 //@Disabled
 public class MechanumAutoShooting extends LinearOpMode {
 
@@ -34,25 +35,28 @@ public class MechanumAutoShooting extends LinearOpMode {
     static final double TURN_POWER  = 0.5;
 
     // Outbound moves
-    static final double FORWARD_1_SEC = 1.75;
-    static final double TURN_SEC      = 0.67;  // TUNE THIS: time for a 90 degree right turn
+    static final double STRAFE_RIGHT_START_SEC = 0.5;  // strafe right at the very beginning
+    static final double FORWARD_1_SEC = 1.77;
+    static final double TURN_SEC      = 0.65;  // TUNE THIS: time for a 90 degree right turn
     static final double FORWARD_2_SEC = 3.50;
     static final double STRAFE_RIGHT_SEC = 0.05;  // small nudge right after the second forward
 
     // Return moves (separate so each can be tuned on its own)
     static final double BACKWARD_1_SEC = 3.50;  // undoes FORWARD_2_SEC
-    static final double TURN_LEFT_SEC  = 0.75;  // TUNE THIS: time for the 90 degree left turn back
+    static final double TURN_LEFT_SEC  = 0.77;  // TUNE THIS: time for the 90 degree left turn back
     static final double BACKWARD_2_SEC = 1.50;  // last move: undoes FORWARD_1_SEC
 
     // Shooter (ticks per second, same units as the TeleOp)
     static final double SHOOTER_VELOCITY   = 1220;
     static final double SPINUP_TIMEOUT_SEC = 3.0;  // feed anyway if it never reaches 1250
-    static final double SHOOT_DURATION_SEC = 6.0;  // total time spent feeding
+    static final double SHOOT_DURATION_SEC = 8.0;  // total time spent feeding
+    static final double INTAKE_POWER       = 1.0;  // intake runs along with the windmill
 
     // ----- Hardware -----
     private DcMotor leftFront, leftBack, rightFront, rightBack;
     private DcMotorEx shooter;
     private CRServo windmillServo;
+    private DcMotor intake;
 
     @Override
     public void runOpMode() {
@@ -63,6 +67,9 @@ public class MechanumAutoShooting extends LinearOpMode {
         waitForStart();
 
         if (!opModeIsActive()) return;
+
+        // 0) Strafe right at the start
+        drive("Strafe right (start)", 0, DRIVE_POWER, 0, STRAFE_RIGHT_START_SEC);
 
         // 1) Forward
         drive("Forward", DRIVE_POWER, 0, 0, FORWARD_1_SEC);
@@ -91,6 +98,7 @@ public class MechanumAutoShooting extends LinearOpMode {
 
         // Windmill starts once the shooter has hit 1250 and stays on for the shoot time
         windmillServo.setPower(1);
+        intake.setPower(INTAKE_POWER);
         double shootStart = getRuntime();
         while (opModeIsActive() && getRuntime() - shootStart < SHOOT_DURATION_SEC) {
             telemetry.addData("Phase", "Shooting");
@@ -99,6 +107,7 @@ public class MechanumAutoShooting extends LinearOpMode {
             idle();
         }
         windmillServo.setPower(0);
+        intake.setPower(0);
         shooter.setVelocity(0);
 
         // 5) Go back to the start: reverse the moves in reverse order
@@ -118,6 +127,7 @@ public class MechanumAutoShooting extends LinearOpMode {
         rightBack  = hardwareMap.get(DcMotor.class, "right_back");
         shooter    = hardwareMap.get(DcMotorEx.class, "shooter");
         windmillServo = hardwareMap.get(CRServo.class, "windmill");
+        intake     = hardwareMap.get(DcMotor.class, "intake");  // CHECK: must match your config name
 
         // Same directions as the TeleOp
         leftFront.setDirection(DcMotor.Direction.FORWARD);
@@ -136,6 +146,9 @@ public class MechanumAutoShooting extends LinearOpMode {
 
         windmillServo.setDirection(DcMotorSimple.Direction.REVERSE);
         windmillServo.setPower(0);
+
+        intake.setDirection(DcMotor.Direction.FORWARD);  // flip to REVERSE if it spins the wrong way
+        intake.setPower(0);
     }
 
     /*

@@ -47,8 +47,8 @@ public class MechanumFor2 extends OpMode {
     private CRServo windmillServo = null;
 
     // ----- Shooter speed settings (ticks per second) -----
-    public static final double SHOOTER_START_VELOCITY = 1250; // ~2678 RPM
-    public static final double SHOOTER_STEP           = 50;   // change per D-pad press (~107 RPM)
+    public static final double SHOOTER_START_VELOCITY = 1225; // ~2678 RPM
+    public static final double SHOOTER_STEP           = 25;   // change per D-pad press (~107 RPM)
     public static final double SHOOTER_MIN_VELOCITY   = 500;  // lowest allowed setting (~1071 RPM)
     public static final double SHOOTER_MAX_VELOCITY   = 2600; // near the 6000 RPM motor's top speed (~5571 RPM)
 
