@@ -15,7 +15,11 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
  * Same hardware names, motor directions and shooter PIDF as the TeleOp.
  *
  * SEQUENCE
+<<<<<<< HEAD
  *   0. Strafe right 0.5 s
+=======
+ *   0. Strafe right 1.10 s
+>>>>>>> 0a08e0f4d60811d8c8556c23df766f2241a890df
  *   1. Forward
  *   2. Turn right 90 degrees
  *   3. Forward, then strafe right 0.05 s
@@ -34,17 +38,29 @@ public class MechanumAutoShooting extends LinearOpMode {
     static final double DRIVE_POWER = 0.5;
     static final double TURN_POWER  = 0.5;
 
+    // First move: strafe right before everything else
+    static final double START_STRAFE_RIGHT_SEC = .95;
+
     // Outbound moves
+<<<<<<< HEAD
     static final double STRAFE_RIGHT_START_SEC = 0.5;  // strafe right at the very beginning
     static final double FORWARD_1_SEC = 1.77;
     static final double TURN_SEC      = 0.65;  // TUNE THIS: time for a 90 degree right turn
+=======
+    static final double FORWARD_1_SEC = 1.55;
+    static final double TURN_SEC      = .67;  // TUNE THIS: time for a 90 degree right turn
     static final double FORWARD_2_SEC = 3.50;
     static final double STRAFE_RIGHT_SEC = 0.05;  // small nudge right after the second forward
 
     // Return moves (separate so each can be tuned on its own)
     static final double BACKWARD_1_SEC = 3.50;  // undoes FORWARD_2_SEC
+<<<<<<< HEAD
     static final double TURN_LEFT_SEC  = 0.77;  // TUNE THIS: time for the 90 degree left turn back
     static final double BACKWARD_2_SEC = 1.50;  // last move: undoes FORWARD_1_SEC
+=======
+    static final double TURN_LEFT_SEC  = 0.75;  // TUNE THIS: time for the 90 degree left turn back
+    static final double BACKWARD_2_SEC = 1.35;  // last move: undoes FORWARD_1_SEC
+>>>>>>> 0a08e0f4d60811d8c8556c23df766f2241a890df
 
     // Shooter (ticks per second, same units as the TeleOp)
     static final double SHOOTER_VELOCITY   = 1220;
@@ -68,8 +84,13 @@ public class MechanumAutoShooting extends LinearOpMode {
 
         if (!opModeIsActive()) return;
 
+<<<<<<< HEAD
         // 0) Strafe right at the start
         drive("Strafe right (start)", 0, DRIVE_POWER, 0, STRAFE_RIGHT_START_SEC);
+=======
+        // 0) Strafe right first
+        drive("Strafe right (start)", 0, DRIVE_POWER, 0, START_STRAFE_RIGHT_SEC);
+>>>>>>> 0a08e0f4d60811d8c8556c23df766f2241a890df
 
         // 1) Forward
         drive("Forward", DRIVE_POWER, 0, 0, FORWARD_1_SEC);

@@ -46,8 +46,16 @@ public class MechanumFor2 extends OpMode {
     private CRServo rightIntakeServo = null;
     private CRServo windmillServo = null;
 
+    // ----- Driving settings -----
+    // Scales turning speed. 0.90 = 10% slower than full. Strafing and forward are unaffected.
+    public static final double TURN_SCALE = 0.90;
+
     // ----- Shooter speed settings (ticks per second) -----
+<<<<<<< HEAD
     public static final double SHOOTER_START_VELOCITY = 1225; // ~2678 RPM
+=======
+    public static final double SHOOTER_START_VELOCITY = 1250; // ~2678 RPM
+>>>>>>> 0a08e0f4d60811d8c8556c23df766f2241a890df
     public static final double SHOOTER_STEP           = 25;   // change per D-pad press (~107 RPM)
     public static final double SHOOTER_MIN_VELOCITY   = 500;  // lowest allowed setting (~1071 RPM)
     public static final double SHOOTER_MAX_VELOCITY   = 2600; // near the 6000 RPM motor's top speed (~5571 RPM)
@@ -130,7 +138,7 @@ public class MechanumFor2 extends OpMode {
         windmillServo.setPower(0);
 
         telemetry.addData("Status", "Initialized");
-        telemetry.addData("Code version", "v4 - two controllers");
+        telemetry.addData("Code version", "v5 - two controllers, turn scale");
         telemetry.addData("Shooter start speed", "%.0f t/s (%.0f RPM)",
                 shooterTargetVelocity, ticksToRpm(shooterTargetVelocity));
     }
@@ -150,12 +158,12 @@ public class MechanumFor2 extends OpMode {
     public void loop() {
         /*
          * GAMEPAD 1: movement + intake.
-         * Right stick: forward/back and strafe. Left stick X: rotate.
+         * Right stick: forward/back and strafe. Left stick X: rotate (scaled by TURN_SCALE).
          * Pushing a stick forward gives a NEGATIVE y value, so we flip the sign.
          */
         double forward = -gamepad1.right_stick_y;
         double strafe  =  gamepad1.right_stick_x;
-        double rotate  =  gamepad1.left_stick_x;
+        double rotate  =  gamepad1.left_stick_x * TURN_SCALE;
         mecanumDrive(forward, strafe, rotate);
 
         // Intake: right trigger pulls in, left trigger pushes out (gamepad1)
