@@ -51,11 +51,7 @@ public class MechanumFor2 extends OpMode {
     public static final double TURN_SCALE = 0.90;
 
     // ----- Shooter speed settings (ticks per second) -----
-<<<<<<< HEAD
-    public static final double SHOOTER_START_VELOCITY = 1225; // ~2678 RPM
-=======
-    public static final double SHOOTER_START_VELOCITY = 1250; // ~2678 RPM
->>>>>>> 0a08e0f4d60811d8c8556c23df766f2241a890df
+    public static final double SHOOTER_START_VELOCITY = 1225; // ~2625 RPM
     public static final double SHOOTER_STEP           = 25;   // change per D-pad press (~107 RPM)
     public static final double SHOOTER_MIN_VELOCITY   = 500;  // lowest allowed setting (~1071 RPM)
     public static final double SHOOTER_MAX_VELOCITY   = 2600; // near the 6000 RPM motor's top speed (~5571 RPM)

@@ -3,7 +3,6 @@ package org.firstinspires.ftc.teamcode.ftc_code;
 import static com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior.BRAKE;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 
@@ -13,17 +12,17 @@ import com.qualcomm.robotcore.hardware.DcMotor;
  *
  * SEQUENCE
  *   1. Drive forward 0.35 s
- *   2. Strafe right 0.35 s
+ *   2. Strafe left 0.5 s
  *
  * This is TIME BASED, so distances change with battery voltage.
  */
-@Autonomous(name = "Mechanum Auto Move Forward And Right", group = "StarterBot")
-public class MechanumAutoMoveForwardAndLeft extends LinearOpMode {
+@Autonomous(name = "Mechanum Auto Move Forward And Left", group = "StarterBot")
+public class MechanumAutoForwardAndLeft extends LinearOpMode {
 
     // ----- Tunables -----
     static final double DRIVE_POWER = 0.5;
     static final double FORWARD_SEC = 0.35;
-    static final double STRAFE_RIGHT_SEC = 0.5;
+    static final double STRAFE_LEFT_SEC = 0.5;
 
     // ----- Hardware -----
     private DcMotor leftFront, leftBack, rightFront, rightBack;
@@ -41,8 +40,8 @@ public class MechanumAutoMoveForwardAndLeft extends LinearOpMode {
         // 1) Forward
         drive(DRIVE_POWER, 0, 0, FORWARD_SEC);
 
-        // 2) Strafe right (positive strafe = right)
-        drive(0, DRIVE_POWER, 0, STRAFE_RIGHT_SEC);
+        // 2) Strafe left (negative strafe = left)
+        drive(0, -DRIVE_POWER, 0, STRAFE_LEFT_SEC);
 
         stopDrive();
         telemetry.addData("Phase", "Done");
