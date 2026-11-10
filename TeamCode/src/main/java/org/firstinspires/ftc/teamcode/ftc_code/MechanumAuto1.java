@@ -15,38 +15,23 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
  * Same hardware names, motor directions and shooter PIDF as the TeleOp.
  *
  * SEQUENCE
- *   0. Strafe right (START_STRAFE_RIGHT_SEC)
- *   1. Forward
- *   2. Turn right 90 degrees
- *   3. Forward, then strafe right 0.05 s
- *   4. Spin the shooter to SHOOTER_VELOCITY; then the windmill and intake start
- *   5. Return to the start by reversing the moves:
- *      backward, turn left 90 degrees, backward
+ *   1. Spin the shooter to SHOOTER_VELOCITY; once it gets there the windmill (and intake) start and shoot
+ *   2. Strafe right 1.25 s
+ *   3. Backward 1.75 s
  *
  * This is TIME BASED, so distances change with battery voltage. Tune the constants below
  * on a fully charged battery.
  */
-@Autonomous(name = "Mechanum Auto Shooting", group = "StarterBot")
+@Autonomous(name = "Mechanum Auto Shooting 1", group = "StarterBot")
 //@Disabled
-public class MechanumAutoShooting extends LinearOpMode {
+public class MechanumAuto1 extends LinearOpMode {
 
     // ----- Tunables -----
     static final double DRIVE_POWER = 0.5;
-    static final double TURN_POWER  = 0.5;
 
-    // First move: strafe right before everything else
-    static final double START_STRAFE_RIGHT_SEC = .95;
-
-    // Outbound moves
-    static final double FORWARD_1_SEC = 1.55;
-    static final double TURN_SEC      = .67;  // TUNE THIS: time for a 90 degree right turn
-    static final double FORWARD_2_SEC = 3.50;
-    static final double STRAFE_RIGHT_SEC = 0.05;  // small nudge right after the second forward
-
-    // Return moves (separate so each can be tuned on its own)
-    static final double BACKWARD_1_SEC = 3.50;  // undoes FORWARD_2_SEC
-    static final double TURN_LEFT_SEC  = 0.75;  // TUNE THIS: time for the 90 degree left turn back
-    static final double BACKWARD_2_SEC = 1.35;  // last move: undoes FORWARD_1_SEC
+    // Moves after shooting
+    static final double STRAFE_RIGHT_SEC = 1.50;
+    static final double BACKWARD_SEC     = 2.75;
 
     // Shooter (ticks per second, same units as the TeleOp)
     static final double SHOOTER_VELOCITY   = 1220;
@@ -70,22 +55,7 @@ public class MechanumAutoShooting extends LinearOpMode {
 
         if (!opModeIsActive()) return;
 
-        // 0) Strafe right first
-        drive("Strafe right (start)", 0, DRIVE_POWER, 0, START_STRAFE_RIGHT_SEC);
-
-        // 1) Forward
-        drive("Forward", DRIVE_POWER, 0, 0, FORWARD_1_SEC);
-
-        // 2) Turn right 90 degrees (+ rotate = clockwise)
-        drive("Turn right 90", 0, 0, TURN_POWER, TURN_SEC);
-
-        // 3) Forward
-        drive("Forward", DRIVE_POWER, 0, 0, FORWARD_2_SEC);
-
-        // 3b) Strafe right a touch
-        drive("Strafe right", 0, DRIVE_POWER, 0, STRAFE_RIGHT_SEC);
-
-        // 4) Spin the shooter up to the target speed
+        // 1) Spin the shooter up to the target speed
         shooter.setVelocity(SHOOTER_VELOCITY);
 
         double spinStart = getRuntime();
@@ -112,10 +82,11 @@ public class MechanumAutoShooting extends LinearOpMode {
         intake.setPower(0);
         shooter.setVelocity(0);
 
-        // 5) Go back to the start: reverse the moves in reverse order
-        drive("Backward", -DRIVE_POWER, 0, 0, BACKWARD_1_SEC);
-        drive("Turn left 90", 0, 0, -TURN_POWER, TURN_LEFT_SEC);
-        drive("Backward", -DRIVE_POWER, 0, 0, BACKWARD_2_SEC);
+        // 2) Strafe right
+        drive("Strafe right", 0, DRIVE_POWER, 0, STRAFE_RIGHT_SEC);
+
+        // 3) Backward
+        drive("Backward", -DRIVE_POWER, 0, 0, BACKWARD_SEC);
 
         stopDrive();
         telemetry.addData("Phase", "Done");
