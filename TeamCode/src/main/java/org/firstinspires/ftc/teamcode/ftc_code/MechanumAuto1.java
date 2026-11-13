@@ -31,10 +31,10 @@ public class MechanumAuto1 extends LinearOpMode {
 
     // Moves after shooting
     static final double STRAFE_RIGHT_SEC = 1.50;
-    static final double BACKWARD_SEC     = 2.75;
+    static final double BACKWARD_SEC     = 2.40;
 
     // Shooter (ticks per second, same units as the TeleOp)
-    static final double SHOOTER_VELOCITY   = 1220;
+    static final double SHOOTER_VELOCITY   = 1225;
     static final double SPINUP_TIMEOUT_SEC = 3.0;  // feed anyway if it never reaches SHOOTER_VELOCITY
     static final double SHOOT_DURATION_SEC = 8.0;  // total time spent feeding
     static final double INTAKE_POWER       = 1.0;  // intake runs along with the windmill

@@ -15,10 +15,11 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
  * Same hardware names, motor directions and shooter PIDF as the TeleOp.
  *
  * SEQUENCE
+ *   0. Wait 10 s
  *   1. Spin the shooter to SHOOTER_VELOCITY; once it gets there the windmill (and intake) start and shoot
- *   2. Forward 0.50 s
- *   3. Turn right 90 degrees
- *   4. Forward 0.85 s
+ *   2. Backward 0.50 s
+ *   3. Turn left (counterclockwise) 90 degrees
+ *   4. Forward 1.50 s
  *
  * This is TIME BASED, so distances change with battery voltage. Tune the constants below
  * on a fully charged battery.
@@ -28,16 +29,18 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 public class MechanumAuto2 extends LinearOpMode {
 
     // ----- Tunables -----
+    static final double START_DELAY_SEC = 10.0;  // wait before doing anything
+
     static final double DRIVE_POWER = 0.5;
     static final double TURN_POWER  = 0.5;
 
     // Moves after shooting
-    static final double FORWARD_1_SEC  = 0.50;
-    static final double TURN_RIGHT_SEC = 0.67;  // TUNE THIS: time for a 90 degree right turn
-    static final double FORWARD_2_SEC  = 0.85;
+    static final double BACKWARD_SEC  = 0.50;
+    static final double TURN_LEFT_SEC = 0.75;  // TUNE THIS: time for a 90 degree left (CCW) turn
+    static final double FORWARD_SEC   = 1.25;
 
     // Shooter (ticks per second, same units as the TeleOp)
-    static final double SHOOTER_VELOCITY   = 1220;
+    static final double SHOOTER_VELOCITY   = 1230;
     static final double SPINUP_TIMEOUT_SEC = 3.0;  // feed anyway if it never reaches SHOOTER_VELOCITY
     static final double SHOOT_DURATION_SEC = 8.0;  // total time spent feeding
     static final double INTAKE_POWER       = 1.0;  // intake runs along with the windmill
@@ -57,6 +60,15 @@ public class MechanumAuto2 extends LinearOpMode {
         waitForStart();
 
         if (!opModeIsActive()) return;
+
+        // 0) Initial delay before doing anything
+        double delayStart = getRuntime();
+        while (opModeIsActive() && getRuntime() - delayStart < START_DELAY_SEC) {
+            telemetry.addData("Phase", "Waiting to start");
+            telemetry.addData("Time left", "%.1f s", START_DELAY_SEC - (getRuntime() - delayStart));
+            telemetry.update();
+            idle();
+        }
 
         // 1) Spin the shooter up to the target speed
         shooter.setVelocity(SHOOTER_VELOCITY);
@@ -85,14 +97,14 @@ public class MechanumAuto2 extends LinearOpMode {
         intake.setPower(0);
         shooter.setVelocity(0);
 
-        // 2) Forward
-        drive("Forward", DRIVE_POWER, 0, 0, FORWARD_1_SEC);
+        // 2) Backward
+        drive("Backward", -DRIVE_POWER, 0, 0, BACKWARD_SEC);
 
-        // 3) Turn right 90 degrees (+ rotate = clockwise)
-        drive("Turn right 90", 0, 0, TURN_POWER, TURN_RIGHT_SEC);
+        // 3) Turn left 90 degrees (negative rotate = counterclockwise)
+        drive("Turn left 90", 0, 0, -TURN_POWER, TURN_LEFT_SEC);
 
         // 4) Forward
-        drive("Forward", DRIVE_POWER, 0, 0, FORWARD_2_SEC);
+        drive("Forward", DRIVE_POWER, 0, 0, FORWARD_SEC);
 
         stopDrive();
         telemetry.addData("Phase", "Done");
