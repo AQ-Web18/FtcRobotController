@@ -30,8 +30,8 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
  */
 
 @TeleOp(name = "Mechanum Solo", group = "StarterBot")
-//@Disabled
-public class Mechanumsolo extends OpMode {
+
+public class MechanumSolo extends OpMode {
 
     // ----- Hardware -----
     private DcMotor leftFront = null;

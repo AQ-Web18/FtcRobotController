@@ -23,7 +23,7 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
  * on a fully charged battery.
  */
 @Autonomous(name = "Mechanum Auto Shooting 1", group = "StarterBot")
-//@Disabled
+
 public class MechanumAuto1 extends LinearOpMode {
 
     // ----- Tunables -----

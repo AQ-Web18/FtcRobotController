@@ -32,7 +32,7 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
  */
 
 @TeleOp(name = "Mechanum Teleop", group = "StarterBot")
-//@Disabled
+
 public class MechanumFor2 extends OpMode {
 
     // ----- Hardware -----
