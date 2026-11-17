@@ -1,0 +1,427 @@
+package org.firstinspires.ftc.teamcode.ftc_code;
+
+import static com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior.BRAKE;
+
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.CRServo;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
+import com.qualcomm.robotcore.util.Range;
+
+import android.util.Size;
+
+import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.vision.VisionPortal;
+import org.firstinspires.ftc.vision.apriltag.AprilTagClusterDetection;
+import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
+import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
+
+import java.util.List;
+
+/*
+ * BLUE ALLIANCE version.
+ * Royal Robotics Guild (FTC 34324) teleop for the goBILDA StarterBot with mecanum wheels.
+ *
+ * CONTROLS
+ *   GAMEPAD 1 (driver): movement + intake + auto-aim
+ *     Right stick up/down ..... drive forward / backward
+ *     Right stick left/right .. strafe left / right
+ *     Left stick left/right ... rotate left / right
+ *     Right trigger ........... intake in (proportional)
+ *     Left trigger ............ intake out / reverse (proportional)
+ *     A (hold) ................ AUTO-AIM: turns to face the HIVE's AprilTags and drives to
+ *                               shooting distance. You can still strafe with the right
+ *                               stick while holding A. Let go of A for normal driving.
+ *
+ *   GAMEPAD 2 (operator): shooter + windmill
+ *     Right bumper (hold) ..... spin up shooter; windmill feeds automatically once at speed
+ *     D-pad right ............. shooter speed UP   (one step per press)
+ *     D-pad left .............. shooter speed DOWN (one step per press)
+ *
+ * The shooter uses closed-loop velocity control (RUN_USING_ENCODER). Velocities are in
+ * encoder ticks per second. These motors report 28 ticks per revolution, so
+ * RPM = ticks/sec / 28 * 60.
+ */
+
+@TeleOp(name = "Mechanum Teleop BLUE", group = "StarterBot")
+
+public class MechanumBlue extends OpMode {
+
+    // ----- Hardware -----
+    private DcMotor leftFront = null;
+    private DcMotor leftBack = null;
+    private DcMotor rightFront = null;
+    private DcMotor rightBack = null;
+    private DcMotorEx shooter = null;
+    private DcMotor intake = null;
+    private CRServo leftIntakeServo = null;
+    private CRServo rightIntakeServo = null;
+    private CRServo windmillServo = null;
+
+    // ----- Vision -----
+    private VisionPortal visionPortal = null;
+    private AprilTagProcessor aprilTag = null;
+
+    // ----- Driving settings -----
+    // Scales turning speed. 0.90 = 10% slower than full. Strafing and forward are unaffected.
+    public static final double TURN_SCALE = 0.90;
+
+    // ----- Auto-aim settings (TUNE THESE ON YOUR ROBOT) -----
+    /*
+     * BIOBUZZ + SDK 12.0: the 4 tags on each CELL are read together as one "cluster".
+     * The cluster's aim point is the CENTER OF THE CELL OPENING, so that's what we aim at.
+     * The HIVE pivot is about 44 in up and the tags face DOWN, so tilt the camera UP.
+     *
+     * Cluster names start with "R" (red) or "B" (blue). We only aim at our alliance's.
+     */
+    public static final String ALLIANCE_PREFIX = "B";   // BLUE alliance
+
+    /*
+     * Distance (inches) from the camera to the CELL opening where your shots go in. This
+     * is the straight-line distance, so it includes the height of the HIVE. Don't calculate it:
+     * park where your shots go in and copy the "Range" number from telemetry.
+     */
+    public static final double DESIRED_DISTANCE = 60.0;
+
+    /*
+     * How hard the robot corrects. Bigger = faster but can wobble back and forth.
+     * If it overshoots and wiggles, make these smaller. If it is too slow, make them bigger.
+     */
+    public static final double SPEED_GAIN = 0.02;   // forward power per inch of distance error
+    public static final double TURN_GAIN  = 0.01;   // turn power per degree of aim error
+
+    // Top speeds while auto-aiming, so the robot does not lunge
+    public static final double MAX_AUTO_SPEED = 0.5;
+    public static final double MAX_AUTO_TURN  = 0.3;
+
+    // How close counts as "LOCKED" on telemetry
+    public static final double AIM_TOLERANCE_DEG = 2.0;
+    public static final double RANGE_TOLERANCE_IN = 2.0;
+
+    /*
+     * If the camera is not mounted in the center of the robot, shots will land off to one
+     * side. Add degrees here to fix it (positive = aim more to the LEFT).
+     */
+    public static final double AIM_OFFSET_DEG = 0.0;
+
+    // ----- Shooter speed settings (ticks per second) -----
+    public static final double SHOOTER_START_VELOCITY = 1225; // ~2625 RPM
+    public static final double SHOOTER_STEP           = 25;   // change per D-pad press (~107 RPM)
+    public static final double SHOOTER_MIN_VELOCITY   = 500;  // lowest allowed setting (~1071 RPM)
+    public static final double SHOOTER_MAX_VELOCITY   = 2600; // near the 6000 RPM motor's top speed (~5571 RPM)
+
+    /*
+     * The windmill only feeds once the shooter reaches this fraction of the target speed.
+     * The original code used 1200 out of 1250, which is 96%. Using a percentage means the
+     * "ready to fire" check still works after you change the speed with the D-pad.
+     */
+    public static final double SHOOTER_READY_FRACTION = 0.96;
+
+    // Current target speed, adjustable during the match with the D-pad (gamepad2)
+    private double shooterTargetVelocity = SHOOTER_START_VELOCITY;
+
+    // Previous D-pad states, used so one press = one step (not one step every loop)
+    private boolean prevDpadRight = false;
+    private boolean prevDpadLeft = false;
+
+    // Drive powers stored as fields so telemetry can show them
+    double leftFrontPower;
+    double rightFrontPower;
+    double leftBackPower;
+    double rightBackPower;
+
+    double intakePower;
+
+    /*
+     * Code to run ONCE when the driver hits INIT
+     */
+    @Override
+    public void init() {
+
+        /*
+         * These names MUST match the names in the robot configuration on the Driver Station.
+         */
+        leftFront  = hardwareMap.get(DcMotor.class, "left_front");
+        leftBack   = hardwareMap.get(DcMotor.class, "left_back");
+        rightFront = hardwareMap.get(DcMotor.class, "right_front");
+        rightBack  = hardwareMap.get(DcMotor.class, "right_back");
+        intake     = hardwareMap.get(DcMotor.class, "intake");
+        shooter    = hardwareMap.get(DcMotorEx.class, "shooter");
+        windmillServo    = hardwareMap.get(CRServo.class, "windmill");
+        leftIntakeServo  = hardwareMap.get(CRServo.class, "leftintakeservo");
+        rightIntakeServo = hardwareMap.get(CRServo.class, "rightintakeservo");
+
+        /*
+         * Each line makes positive power spin that wheel so the robot moves FORWARD.
+         * These were set from testing on our robot: with the stock settings, left_front,
+         * right_front and right_back spun backward, so those three were flipped.
+         * If a wheel spins the wrong way, flip ONLY that wheel's line.
+         * Use the "Drive Motor Test" OpMode to check one wheel at a time.
+         */
+        leftFront.setDirection(DcMotor.Direction.FORWARD);
+        leftBack.setDirection(DcMotor.Direction.REVERSE);
+        rightFront.setDirection(DcMotor.Direction.REVERSE);
+        rightBack.setDirection(DcMotor.Direction.REVERSE);
+
+        // Brake mode makes the robot stop quickly when the sticks are released
+        leftFront.setZeroPowerBehavior(BRAKE);
+        leftBack.setZeroPowerBehavior(BRAKE);
+        rightFront.setZeroPowerBehavior(BRAKE);
+        rightBack.setZeroPowerBehavior(BRAKE);
+        intake.setZeroPowerBehavior(BRAKE);
+
+        /*
+         * Shooter uses closed-loop velocity control. If the speed jumps far above the target,
+         * check that the encoder cable is in the port next to the motor's power port.
+         */
+        shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        shooter.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER,
+                new PIDFCoefficients(40, 0, 0, 12.5));
+
+        // Servo directions so both intake servos pull game elements in
+        rightIntakeServo.setDirection(DcMotorSimple.Direction.REVERSE);
+        windmillServo.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        // Start all servos stopped
+        leftIntakeServo.setPower(0);
+        rightIntakeServo.setPower(0);
+        windmillServo.setPower(0);
+
+        // Start the camera and AprilTag detection
+        initAprilTag();
+
+        telemetry.addData("Status", "Initialized");
+        telemetry.addData("Code version", "v7 BLUE - BIOBUZZ CELL auto-aim (gp1 A), SDK 12");
+        telemetry.addData("Shooter start speed", "%.0f t/s (%.0f RPM)",
+                shooterTargetVelocity, ticksToRpm(shooterTargetVelocity));
+    }
+
+    @Override
+    public void init_loop() {
+        // Lets you check the camera sees the CELL before the match starts
+        AprilTagClusterDetection cell = findTargetCell();
+        if (cell != null) {
+            telemetry.addData("Camera", "Sees %s: aim %.1f deg, range %.1f in",
+                    cell.metadata.name, cell.ftcPose.bearing, cell.ftcPose.range);
+        } else {
+            telemetry.addData("Camera", "No scoring CELL in view");
+        }
+    }
+
+    @Override
+    public void start() {
+    }
+
+    /*
+     * Code to run REPEATEDLY after the driver hits START but before they hit STOP
+     */
+    @Override
+    public void loop() {
+        /*
+         * GAMEPAD 1: movement + intake.
+         * Right stick: forward/back and strafe. Left stick X: rotate (scaled by TURN_SCALE).
+         * Pushing a stick forward gives a NEGATIVE y value, so we flip the sign.
+         */
+        double forward = -gamepad1.right_stick_y;
+        double strafe  =  gamepad1.right_stick_x;
+        double rotate  =  gamepad1.left_stick_x * TURN_SCALE;
+
+        // Hold A to let the camera take over aiming and distance
+        if (gamepad1.a) {
+            AprilTagClusterDetection cell = findTargetCell();
+
+            if (cell != null) {
+                /*
+                 * bearing = how many degrees the CELL opening is to the LEFT of the camera's center.
+                 * range   = straight-line distance from the camera to the CELL opening, in inches.
+                 */
+                double aimError   = cell.ftcPose.bearing - AIM_OFFSET_DEG;
+                double rangeError = cell.ftcPose.range - DESIRED_DISTANCE;
+
+                // Positive rotate turns RIGHT in our drive code, so a tag on the left
+                // (positive bearing) needs negative rotate.
+                rotate  = Range.clip(-aimError * TURN_GAIN, -MAX_AUTO_TURN, MAX_AUTO_TURN);
+                forward = Range.clip(rangeError * SPEED_GAIN, -MAX_AUTO_SPEED, MAX_AUTO_SPEED);
+                // strafe stays on the driver's right stick so they can still slide sideways
+
+                boolean locked = Math.abs(aimError) < AIM_TOLERANCE_DEG
+                        && Math.abs(rangeError) < RANGE_TOLERANCE_IN;
+
+                telemetry.addData("AUTO-AIM", locked ? "LOCKED - FIRE!" : "Aligning...");
+                telemetry.addData("Target", "%s (%d%% of tags visible)",
+                        cell.metadata.name, cell.percentClusterFound);
+                telemetry.addData("Aim error", "%.1f deg", aimError);
+                telemetry.addData("Range", "%.1f in (want %.1f)", cell.ftcPose.range, DESIRED_DISTANCE);
+            } else {
+                // No tag seen: stop auto-moving but keep driver strafe so they can find it
+                forward = 0;
+                rotate  = 0;
+                telemetry.addData("AUTO-AIM", "NO SCORING CELL IN VIEW");
+            }
+        }
+
+        mecanumDrive(forward, strafe, rotate);
+
+        // Intake: right trigger pulls in, left trigger pushes out (gamepad1)
+        intakePower = gamepad1.right_trigger - gamepad1.left_trigger;
+
+        // GAMEPAD 2: shooter + windmill
+        adjustShooterSpeed();
+        launch();
+
+        // Intake is controlled only by gamepad1's triggers
+        intake.setPower(intakePower);
+        leftIntakeServo.setPower(intakePower);
+        rightIntakeServo.setPower(intakePower);
+
+        // ----- Telemetry -----
+        telemetry.addData("Shooter target", "%.0f t/s (%.0f RPM)",
+                shooterTargetVelocity, ticksToRpm(shooterTargetVelocity));
+        telemetry.addData("Shooter actual", "%.0f t/s (%.0f RPM)",
+                shooter.getVelocity(), ticksToRpm(shooter.getVelocity()));
+        telemetry.addData("Front", "left (%.2f), right (%.2f)", leftFrontPower, rightFrontPower);
+        telemetry.addData("Back", "left (%.2f), right (%.2f)", leftBackPower, rightBackPower);
+        telemetry.addData("Triggers (gp1)", "left (%.2f), right (%.2f)", gamepad1.left_trigger, gamepad1.right_trigger);
+    }
+
+    @Override
+    public void stop() {
+        // Shut the camera off cleanly so it is ready for the next OpMode
+        if (visionPortal != null) {
+            visionPortal.close();
+        }
+    }
+
+    /*
+     * Sets up the Logitech C270 webcam and the AprilTag processor.
+     * "Webcam 1" MUST match the camera's name in the robot configuration.
+     *
+     * 640x480 matters: the SDK has built-in lens calibration for the C270 at that
+     * resolution, which is what makes the distance and angle numbers accurate.
+     *
+     * We use the SDK's built-in tag library. In SDK 12.0+ it already knows the BIOBUZZ
+     * clusters (tag sizes and where the CELL opening is), so nothing else is needed.
+     */
+    private void initAprilTag() {
+        aprilTag = new AprilTagProcessor.Builder()
+                .setOutputUnits(DistanceUnit.INCH, AngleUnit.DEGREES)
+                .build();
+
+        // Lower = detects from farther away but slower. 2 is a good balance for teleop.
+        aprilTag.setDecimation(2);
+
+        visionPortal = new VisionPortal.Builder()
+                .setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"))
+                .setCameraResolution(new Size(640, 480))
+                .addProcessor(aprilTag)
+                .build();
+    }
+
+    /*
+     * Returns the closest CELL we should shoot into, or null if there isn't one in view.
+     * A CELL counts if:
+     *   - it's a cluster (SDK 12.0: BIOBUZZ tags only come as clusters),
+     *   - its name starts with our alliance letter ("R" or "B"),
+     *   - it's right-side up (roll under 90 degrees), meaning it's the CELL facing UP.
+     */
+    private AprilTagClusterDetection findTargetCell() {
+        List<AprilTagDetection> detections = aprilTag.getDetections();
+        AprilTagClusterDetection best = null;
+
+        for (AprilTagDetection detection : detections) {
+            if (!(detection instanceof AprilTagClusterDetection)) continue;
+            AprilTagClusterDetection cell = (AprilTagClusterDetection) detection;
+
+            if (cell.ftcPose == null) continue;
+            if (!cell.metadata.name.startsWith(ALLIANCE_PREFIX)) continue;
+            if (Math.abs(cell.ftcPose.roll) >= 90) continue;   // upside down = not scorable
+
+            if (best == null || cell.ftcPose.range < best.ftcPose.range) {
+                best = cell;
+            }
+        }
+        return best;
+    }
+
+    /*
+     * Standard mecanum math. If any wheel power goes above 1.0, all four are scaled down
+     * together so the robot keeps moving in the direction the driver asked for.
+     */
+    void mecanumDrive(double forward, double strafe, double rotate) {
+        leftFrontPower  = forward + strafe + rotate;
+        rightFrontPower = forward - strafe - rotate;
+        leftBackPower   = forward - strafe + rotate;
+        rightBackPower  = forward + strafe - rotate;
+
+        double max = Math.max(Math.abs(leftFrontPower), Math.abs(rightFrontPower));
+        max = Math.max(max, Math.abs(leftBackPower));
+        max = Math.max(max, Math.abs(rightBackPower));
+
+        if (max > 1.0) {
+            leftFrontPower  /= max;
+            rightFrontPower /= max;
+            leftBackPower   /= max;
+            rightBackPower  /= max;
+        }
+
+        leftFront.setPower(leftFrontPower);
+        rightFront.setPower(rightFrontPower);
+        leftBack.setPower(leftBackPower);
+        rightBack.setPower(rightBackPower);
+    }
+
+    /*
+     * GAMEPAD 2: D-pad right = faster, D-pad left = slower.
+     * We compare to last loop's button state so the speed changes only once per press.
+     * Without this, holding the button for half a second would change the speed ~25 times.
+     */
+    void adjustShooterSpeed() {
+        boolean dpadRight = gamepad2.dpad_right;
+        boolean dpadLeft  = gamepad2.dpad_left;
+
+        if (dpadRight && !prevDpadRight) {
+            shooterTargetVelocity += SHOOTER_STEP;
+        }
+        if (dpadLeft && !prevDpadLeft) {
+            shooterTargetVelocity -= SHOOTER_STEP;
+        }
+
+        // Keep the target inside safe limits
+        shooterTargetVelocity = Math.max(SHOOTER_MIN_VELOCITY,
+                Math.min(SHOOTER_MAX_VELOCITY, shooterTargetVelocity));
+
+        prevDpadRight = dpadRight;
+        prevDpadLeft  = dpadLeft;
+    }
+
+    /*
+     * GAMEPAD 2: hold right bumper to spin up the shooter. Once it reaches 96% of the
+     * target speed, the windmill feeds elements in. The intake is NOT touched here;
+     * it is controlled only by gamepad1.
+     */
+    void launch() {
+        if (gamepad2.right_bumper) {
+            shooter.setVelocity(shooterTargetVelocity);
+        } else {
+            shooter.setVelocity(0);
+        }
+
+        double readyVelocity = shooterTargetVelocity * SHOOTER_READY_FRACTION;
+
+        if (gamepad2.right_bumper && shooter.getVelocity() > readyVelocity) {
+            windmillServo.setPower(1);
+        } else {
+            windmillServo.setPower(0);
+        }
+    }
+
+    // Converts encoder ticks per second to RPM (28 ticks per revolution)
+    private double ticksToRpm(double ticksPerSecond) {
+        return ticksPerSecond / 28.0 * 60.0;
+    }
+}
