@@ -86,14 +86,14 @@ public class MechanumRed extends OpMode {
      * is the straight-line distance, so it includes the height of the HIVE. Don't calculate it:
      * park where your shots go in and copy the "Range" number from telemetry.
      */
-    public static final double DESIRED_DISTANCE = 60.0;
+    public static final double DESIRED_DISTANCE = 55;
 
     /*
      * How hard the robot corrects. Bigger = faster but can wobble back and forth.
      * If it overshoots and wiggles, make these smaller. If it is too slow, make them bigger.
      */
-    public static final double SPEED_GAIN = 0.02;   // forward power per inch of distance error
-    public static final double TURN_GAIN  = 0.01;   // turn power per degree of aim error
+    public static final double SPEED_GAIN = 0.05;   // forward power per inch of distance error
+    public static final double TURN_GAIN  = 0.03;   // turn power per degree of aim error
 
     // Top speeds while auto-aiming, so the robot does not lunge
     public static final double MAX_AUTO_SPEED = 0.5;
@@ -107,10 +107,10 @@ public class MechanumRed extends OpMode {
      * If the camera is not mounted in the center of the robot, shots will land off to one
      * side. Add degrees here to fix it (positive = aim more to the LEFT).
      */
-    public static final double AIM_OFFSET_DEG = 0.0;
+    public static final double AIM_OFFSET_DEG = 0.3;
 
     // ----- Shooter speed settings (ticks per second) -----
-    public static final double SHOOTER_START_VELOCITY = 1225; // ~2625 RPM
+    public static final double SHOOTER_START_VELOCITY = 1250; // ~2625 RPM
     public static final double SHOOTER_STEP           = 25;   // change per D-pad press (~107 RPM)
     public static final double SHOOTER_MIN_VELOCITY   = 500;  // lowest allowed setting (~1071 RPM)
     public static final double SHOOTER_MAX_VELOCITY   = 2600; // near the 6000 RPM motor's top speed (~5571 RPM)
@@ -196,7 +196,7 @@ public class MechanumRed extends OpMode {
         initAprilTag();
 
         telemetry.addData("Status", "Initialized");
-        telemetry.addData("Code version", "v7 RED - BIOBUZZ CELL auto-aim (gp1 A), SDK 12");
+        telemetry.addData("Code version", "v7 RED - BIOBUZZ CELL auto-aim (gp1 A), SDK 12, auto forward/back reversed");
         telemetry.addData("Shooter start speed", "%.0f t/s (%.0f RPM)",
                 shooterTargetVelocity, ticksToRpm(shooterTargetVelocity));
     }
@@ -246,7 +246,10 @@ public class MechanumRed extends OpMode {
                 // Positive rotate turns RIGHT in our drive code, so a tag on the left
                 // (positive bearing) needs negative rotate.
                 rotate  = Range.clip(-aimError * TURN_GAIN, -MAX_AUTO_TURN, MAX_AUTO_TURN);
-                forward = Range.clip(rangeError * SPEED_GAIN, -MAX_AUTO_SPEED, MAX_AUTO_SPEED);
+
+                // REVERSED: the minus sign flips forward/back. Too far = drive BACKWARD,
+                // too close = drive FORWARD. Remove the minus sign to go back to the original.
+                forward = Range.clip(-rangeError * SPEED_GAIN, -MAX_AUTO_SPEED, MAX_AUTO_SPEED);
                 // strafe stays on the driver's right stick so they can still slide sideways
 
                 boolean locked = Math.abs(aimError) < AIM_TOLERANCE_DEG
@@ -280,6 +283,15 @@ public class MechanumRed extends OpMode {
         rightIntakeServo.setPower(intakePower);
 
         // ----- Telemetry -----
+        // Camera angle to the CELL, shown all the time (not just while holding A).
+        // Positive = CELL is to the LEFT of the camera's center, negative = to the RIGHT.
+        AprilTagClusterDetection seenCell = findTargetCell();
+        if (seenCell != null) {
+            telemetry.addData("Camera angle", "%.1f deg (%s)", seenCell.ftcPose.bearing,
+                    seenCell.ftcPose.bearing > 0 ? "CELL is LEFT" : "CELL is RIGHT");
+        } else {
+            telemetry.addData("Camera angle", "no CELL in view");
+        }
         telemetry.addData("Shooter target", "%.0f t/s (%.0f RPM)",
                 shooterTargetVelocity, ticksToRpm(shooterTargetVelocity));
         telemetry.addData("Shooter actual", "%.0f t/s (%.0f RPM)",
