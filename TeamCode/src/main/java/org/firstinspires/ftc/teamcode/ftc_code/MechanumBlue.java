@@ -8,6 +8,7 @@ import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.util.Range;
 
@@ -42,6 +43,14 @@ import java.util.List;
  *     Right bumper (hold) ..... spin up shooter; windmill feeds automatically once at speed
  *     D-pad right ............. shooter speed UP   (one step per press)
  *     D-pad left .............. shooter speed DOWN (one step per press)
+ *
+ *   SHOOT SIGNAL (gamepad 2): while the driver holds A, the operator's controller tells them
+ *   when to shoot:
+ *     Buzz + GREEN light ...... LOCKED on the CELL: SHOOT NOW
+ *     RED light ............... auto-aim is lining up: wait
+ *     Light off ............... auto-aim is not running
+ *   (Rumble and lights need a PS4/PS5-style controller. Logitech F310 controllers can't do
+ *   either, so watch the "SHOOT" line at the top of telemetry instead.)
  *
  * The shooter uses closed-loop velocity control (RUN_USING_ENCODER). Velocities are in
  * encoder ticks per second. These motors report 28 ticks per revolution, so
@@ -107,10 +116,10 @@ public class MechanumBlue extends OpMode {
      * If the camera is not mounted in the center of the robot, shots will land off to one
      * side. Add degrees here to fix it (positive = aim more to the LEFT).
      */
-    public static final double AIM_OFFSET_DEG = 0.3;
+    public static final double AIM_OFFSET_DEG = 0.2;
 
     // ----- Shooter speed settings (ticks per second) -----
-    public static final double SHOOTER_START_VELOCITY = 1250; // ~2625 RPM
+    public static final double SHOOTER_START_VELOCITY = 1250; // ~2679 RPM
     public static final double SHOOTER_STEP           = 25;   // change per D-pad press (~107 RPM)
     public static final double SHOOTER_MIN_VELOCITY   = 500;  // lowest allowed setting (~1071 RPM)
     public static final double SHOOTER_MAX_VELOCITY   = 2600; // near the 6000 RPM motor's top speed (~5571 RPM)
@@ -128,6 +137,10 @@ public class MechanumBlue extends OpMode {
     // Previous D-pad states, used so one press = one step (not one step every loop)
     private boolean prevDpadRight = false;
     private boolean prevDpadLeft = false;
+
+    // Shoot signal: 0 = off, 1 = aligning (red), 2 = locked (green). Only send changes to the
+    // controller, so we don't flood it with the same command every loop.
+    private int signalState = 0;
 
     // Drive powers stored as fields so telemetry can show them
     double leftFrontPower;
@@ -196,7 +209,7 @@ public class MechanumBlue extends OpMode {
         initAprilTag();
 
         telemetry.addData("Status", "Initialized");
-        telemetry.addData("Code version", "v7 BLUE - BIOBUZZ CELL auto-aim (gp1 A), SDK 12, auto forward/back reversed");
+        telemetry.addData("Code version", "v9 BLUE - auto-aim (hold gp1 A), shoot signal on gp2");
         telemetry.addData("Shooter start speed", "%.0f t/s (%.0f RPM)",
                 shooterTargetVelocity, ticksToRpm(shooterTargetVelocity));
     }
@@ -231,6 +244,10 @@ public class MechanumBlue extends OpMode {
         double strafe  =  gamepad1.right_stick_x;
         double rotate  =  gamepad1.left_stick_x * TURN_SCALE;
 
+        // Used for the shoot signal on gamepad 2
+        boolean aiming = false;
+        boolean locked = false;
+
         // Hold A to let the camera take over aiming and distance
         if (gamepad1.a) {
             AprilTagClusterDetection cell = findTargetCell();
@@ -252,7 +269,8 @@ public class MechanumBlue extends OpMode {
                 forward = Range.clip(-rangeError * SPEED_GAIN, -MAX_AUTO_SPEED, MAX_AUTO_SPEED);
                 // strafe stays on the driver's right stick so they can still slide sideways
 
-                boolean locked = Math.abs(aimError) < AIM_TOLERANCE_DEG
+                aiming = true;
+                locked = Math.abs(aimError) < AIM_TOLERANCE_DEG
                         && Math.abs(rangeError) < RANGE_TOLERANCE_IN;
 
                 telemetry.addData("AUTO-AIM", locked ? "LOCKED - FIRE!" : "Aligning...");
@@ -264,6 +282,7 @@ public class MechanumBlue extends OpMode {
                 // No tag seen: stop auto-moving but keep driver strafe so they can find it
                 forward = 0;
                 rotate  = 0;
+                aiming  = true;   // still aiming, just can't see it: show RED (wait)
                 telemetry.addData("AUTO-AIM", "NO SCORING CELL IN VIEW");
             }
         }
@@ -277,12 +296,25 @@ public class MechanumBlue extends OpMode {
         adjustShooterSpeed();
         launch();
 
+        // Tell the operator when to shoot
+        updateShootSignal(aiming, locked);
+
         // Intake is controlled only by gamepad1's triggers
         intake.setPower(intakePower);
         leftIntakeServo.setPower(intakePower);
         rightIntakeServo.setPower(intakePower);
 
         // ----- Telemetry -----
+        // Big, simple line for the operator
+        if (locked) {
+            boolean shooterReady = gamepad2.right_bumper
+                    && shooter.getVelocity() > shooterTargetVelocity * SHOOTER_READY_FRACTION;
+            telemetry.addData("SHOOT", shooterReady ? ">>> FIRING <<<" : ">>> SHOOT NOW! (hold RB) <<<");
+        } else if (aiming) {
+            telemetry.addData("SHOOT", "wait... lining up");
+        } else {
+            telemetry.addData("SHOOT", "-");
+        }
         // Camera angle to the CELL, shown all the time (not just while holding A).
         // Positive = CELL is to the LEFT of the camera's center, negative = to the RIGHT.
         AprilTagClusterDetection seenCell = findTargetCell();
@@ -430,6 +462,31 @@ public class MechanumBlue extends OpMode {
         } else {
             windmillServo.setPower(0);
         }
+    }
+
+    /*
+     * Controls the operator's (gamepad 2) light and rumble.
+     *   Just became LOCKED -> one strong buzz + GREEN light
+     *   Aiming, not locked -> RED light
+     *   Not aiming         -> light off
+     * We only send a command when the state CHANGES, so it buzzes once per lock-on
+     * instead of nonstop.
+     */
+    void updateShootSignal(boolean aiming, boolean locked) {
+        int newState = locked ? 2 : (aiming ? 1 : 0);
+        if (newState == signalState) return;   // nothing changed
+
+        if (newState == 2) {
+            gamepad2.rumble(1.0, 1.0, 400);     // left motor, right motor, milliseconds
+            gamepad2.setLedColor(0, 1, 0, Gamepad.LED_DURATION_CONTINUOUS);   // green
+        } else if (newState == 1) {
+            gamepad2.stopRumble();
+            gamepad2.setLedColor(1, 0, 0, Gamepad.LED_DURATION_CONTINUOUS);   // red
+        } else {
+            gamepad2.stopRumble();
+            gamepad2.setLedColor(0, 0, 0, Gamepad.LED_DURATION_CONTINUOUS);   // off
+        }
+        signalState = newState;
     }
 
     // Converts encoder ticks per second to RPM (28 ticks per revolution)
